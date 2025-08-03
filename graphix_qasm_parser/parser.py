@@ -10,6 +10,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     CommonTokenStream,
     FileStream,
     InputStream,
+    ParserRuleContext,
 )
 from graphix import Circuit
 from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
@@ -33,7 +34,7 @@ class OpenQASMParser:
         tokens = CommonTokenStream(lexer)
         parser = qasm3Parser(tokens)
         tree = parser.program()  # type: ignore[no-untyped-call]
-        visitor = _CircuitVisitor()
+        visitor = _CircuitVisitor(self)
         tree.accept(visitor)
         return Circuit(visitor.width, instr=visitor.instructions)
 
@@ -48,8 +49,173 @@ class OpenQASMParser:
         return self.parse_stream(stream)
 
 
+@dataclass
 class _Value:
-    pass
+    ctx: ParserRuleContext | str  # type: ignore[valid-type]
+
+    def __neg__(self) -> _Value:
+        return NotImplemented  # type: ignore[no-any-return]
+
+    def __add__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __radd__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __sub__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __rsub__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __mul__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __rmul__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __truediv__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __rtruediv__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __mod__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __rmod__(self, other: object) -> _Value:
+        return NotImplemented
+
+    def __int__(self) -> int:
+        msg = "Not an integer value: {ctx.getText() if isinstance(ctx, ParserRuleContext) else ctx}"
+        raise TypeError(msg)
+
+    def __float__(self) -> float:
+        msg = "Not a floating-point value: {ctx.getText() if isinstance(ctx, ParserRuleContext) else ctx}"
+        raise TypeError(msg)
+
+
+@dataclass
+class _Int(_Value):
+    value: int
+
+    @override
+    def __neg__(self) -> _Value:
+        return _Int(self.ctx, -self.value)
+
+    @override
+    def __add__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Int(self.ctx, self.value + other.value)
+        return NotImplemented
+
+    @override
+    def __sub__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Int(self.ctx, self.value - other.value)
+        return NotImplemented
+
+    @override
+    def __mul__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Int(self.ctx, self.value * other.value)
+        return NotImplemented
+
+    @override
+    def __truediv__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            result = self.value / other.value
+            if isinstance(result, int):
+                return _Int(self.ctx, result)
+            return _Float(self.ctx, result)
+        return NotImplemented
+
+    @override
+    def __mod__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Int(self.ctx, self.value % other.value)
+        return NotImplemented
+
+    @override
+    def __int__(self) -> int:
+        return self.value
+
+    @override
+    def __float__(self) -> float:
+        return float(self.value)
+
+
+@dataclass
+class _Float(_Value):
+    value: float
+
+    @override
+    def __neg__(self) -> _Value:
+        return _Float(self.ctx, -self.value)
+
+    @override
+    def __add__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Float(self.ctx, self.value + other.value)
+        return NotImplemented
+
+    @override
+    def __radd__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Float(self.ctx, other.value + self.value)
+        return NotImplemented
+
+    @override
+    def __sub__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Float(self.ctx, self.value - other.value)
+        return NotImplemented
+
+    @override
+    def __rsub__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Float(self.ctx, other.value - self.value)
+        return NotImplemented
+
+    @override
+    def __mul__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Float(self.ctx, self.value * other.value)
+        return NotImplemented
+
+    @override
+    def __rmul__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Float(self.ctx, other.value * self.value)
+        return NotImplemented
+
+    @override
+    def __truediv__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Float(self.ctx, self.value / other.value)
+        return NotImplemented
+
+    @override
+    def __rtruediv__(self, other: object) -> _Value:
+        if isinstance(other, _Int):
+            return _Float(self.ctx, other.value / self.value)
+        return NotImplemented
+
+    @override
+    def __mod__(self, other: object) -> _Value:
+        if isinstance(other, _Float):
+            return _Float(self.ctx, self.value % other.value)
+        return NotImplemented
+
+    @override
+    def __rmod__(self, other: object) -> _Value:
+        if isinstance(other, _Float):
+            return _Float(self.ctx, other.value % self.value)
+        return NotImplemented
+
+    @override
+    def __float__(self) -> float:
+        return self.value
 
 
 @dataclass
@@ -68,14 +234,19 @@ class _Array(_Value):
 
 
 class _CircuitVisitor(qasm3ParserVisitor):
+    parser: OpenQASMParser
     width: int
     instructions: list[Instruction]
     env: dict[str, _Value]
 
-    def __init__(self) -> None:
+    def __init__(self, parser: OpenQASMParser) -> None:
+        self.parser = parser
         self.width = 0
         self.instructions = []
-        self.env = {}
+        self.env = {
+            "pi": _Float("pi", math.pi),
+            "π": _Float("π", math.pi),
+        }
 
     @override
     def visitOldStyleDeclarationStatement(self, ctx: qasm3Parser.OldStyleDeclarationStatementContext) -> None:
@@ -90,13 +261,20 @@ class _CircuitVisitor(qasm3ParserVisitor):
             raise NotImplementedError(msg)
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         designator = ctx.designator()  # type: ignore[no-untyped-call]
-        self.declare_registers(decl_class, identifier, designator)
+        self.declare_registers(ctx, decl_class, identifier, designator)
 
     @override
     def visitQuantumDeclarationStatement(self, ctx: qasm3Parser.QuantumDeclarationStatementContext) -> None:
         designator = ctx.qubitType().designator()  # type: ignore[no-untyped-call]
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
-        self.declare_registers(_Qubit, identifier, designator)
+        self.declare_registers(ctx, _Qubit, identifier, designator)
+
+    @override
+    def visitConstDeclarationStatement(self, ctx: qasm3Parser.ConstDeclarationStatementContext) -> None:
+        identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
+        value = ctx.declarationExpression()  # type: ignore[no-untyped-call]
+        expr = self.evaluate_expression(value)
+        self.env[identifier] = expr
 
     @override
     def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:  # noqa: C901, PLR0912
@@ -107,7 +285,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         ]
         if expr_list := ctx.expressionList():  # type: ignore[no-untyped-call]
             exprs = [
-                self.evaluate_expression_float(expr_list.getChild(i)) for i in range(0, expr_list.getChildCount(), 2)
+                float(self.evaluate_expression(expr_list.getChild(i))) for i in range(0, expr_list.getChildCount(), 2)
             ]
         else:
             exprs = []
@@ -153,16 +331,20 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.instructions.append(instruction)
 
     def declare_registers(
-        self, decl_class: type[_Bit | _Qubit], identifier: str, designator: qasm3Parser.DesignatorContext | None
+        self,
+        ctx: ParserRuleContext,  # type: ignore[valid-type]
+        decl_class: type[_Bit | _Qubit],
+        identifier: str,
+        designator: qasm3Parser.DesignatorContext | None,
     ) -> None:
         value: _Value
         if designator:
             expression = designator.expression()  # type: ignore[no-untyped-call]
-            count = self.evaluate_expression_int(expression)
-            value = _Array([decl_class(self.width + i) for i in range(count)])
+            count = int(self.evaluate_expression(expression))
+            value = _Array(ctx, [decl_class(ctx, self.width + i) for i in range(count)])
             self.width += count
         else:
-            value = decl_class(self.width)
+            value = decl_class(ctx, self.width)
             self.width += 1
         self.env[identifier] = value
 
@@ -185,7 +367,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
                 if not isinstance(value, _Array):
                     msg = f"Array expected: {identifier}"
                     raise TypeError(msg)
-                index = self.evaluate_expression_int(operator.expression(0))
+                index = int(self.evaluate_expression(operator.expression(0)))
                 if index < 0:
                     msg = f"Negative index: {identifier}"
                     raise IndexError(msg)
@@ -197,31 +379,82 @@ class _CircuitVisitor(qasm3ParserVisitor):
         msg = f"Unknown operand: {operand}"
         raise NotImplementedError(msg)
 
-    def evaluate_expression_float(self, expr: qasm3Parser.ExpressionContext) -> float:
-        if expr.getChildCount() == 3:
-            lhs = self.evaluate_expression_float(expr.getChild(0))
-            rhs = self.evaluate_expression_float(expr.getChild(2))
-            operator = expr.getChild(1).symbol.type
-            if operator == qasm3Parser.SLASH:
-                return lhs / rhs
-            if operator == qasm3Parser.ASTERISK:
-                return lhs * rhs
-        else:
-            child = expr.getChild(0)
-            if child.symbol.type == qasm3Parser.DecimalIntegerLiteral:
-                return int(child.symbol.text)
-            if child.symbol.type == qasm3Parser.FloatLiteral:
-                return float(child.symbol.text)
-            if child.symbol.type == qasm3Parser.Identifier:
-                identifier = child.symbol.text
-                if identifier == "pi":
-                    return math.pi
-        msg = f"Unknown expression: {expr}"
+    def evaluate_expression(self, expr: qasm3Parser.ExpressionContext) -> _Value:
+        return _ExpressionVisitor(self).parse(expr)
+
+
+class _ExpressionVisitor(qasm3ParserVisitor):
+    circuit: _CircuitVisitor
+
+    def __init__(self, circuit: _CircuitVisitor) -> None:
+        self.circuit = circuit
+
+    def parse(self, expr: qasm3Parser.ExpressionContext) -> _Value:
+        value: _Value | None = expr.accept(self)
+        if value is None:
+            msg = f"Cannot parse value: {expr.getText()}"
+            raise NotImplementedError(msg)
+        return value
+
+    @override
+    def visitParenthesisExpression(self, ctx: qasm3Parser.ParenthesisExpressionContext) -> _Value:
+        expr: qasm3Parser.ExpressionContext = ctx.expression()  # type: ignore[no-untyped-call]
+        return self.parse(expr)
+
+    @override
+    def visitUnaryExpression(self, ctx: qasm3Parser.UnaryExpressionContext) -> _Value:
+        operand_expr: qasm3Parser.ExpressionContext = ctx.expression()  # type: ignore[no-untyped-call]
+        operand = self.parse(operand_expr)
+        operator = ctx.getChild(0).symbol.type
+        if operator == qasm3Parser.MINUS:
+            result = -operand
+            result.ctx = ctx
+            return result
+        msg = f"Unknown operator: {ctx.getChild(0).symbol.text}"
         raise NotImplementedError(msg)
 
-    def evaluate_expression_int(self, expr: qasm3Parser.ExpressionContext) -> int:
-        value = self.evaluate_expression_float(expr)
-        if not isinstance(value, int):
-            msg = "Integer expected: {value}"
-            raise TypeError(msg)
-        return value
+    @override
+    def visitAdditiveExpression(self, ctx: qasm3Parser.AdditiveExpressionContext) -> _Value:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitMultiplicativeExpression(self, ctx: qasm3Parser.MultiplicativeExpressionContext) -> _Value:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitLiteralExpression(self, ctx: qasm3Parser.LiteralExpressionContext) -> _Value:
+        literal = ctx.getChild(0)
+        if literal.symbol.type == qasm3Parser.DecimalIntegerLiteral:
+            return _Int(ctx, int(literal.symbol.text))
+        if literal.symbol.type == qasm3Parser.FloatLiteral:
+            return _Float(ctx, float(literal.symbol.text))
+        if literal.symbol.type == qasm3Parser.Identifier:
+            identifier = literal.symbol.text
+            if value := self.circuit.env.get(identifier):
+                return value
+        msg = f"Unknown literal: {literal.symbol.text}"
+        raise NotImplementedError(msg)
+
+    def parse_binary_operator(
+        self, ctx: qasm3Parser.AdditiveExpressionContext | qasm3Parser.MultiplicativeExpressionContext
+    ) -> _Value:
+        lhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(0)
+        rhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(2)
+        lhs = self.parse(lhs_expr)
+        rhs = self.parse(rhs_expr)
+        operator = ctx.getChild(1).symbol.type
+        if operator == qasm3Parser.ASTERISK:
+            result = lhs * rhs
+        elif operator == qasm3Parser.SLASH:
+            result = lhs / rhs
+        elif operator == qasm3Parser.PERCENT:
+            result = lhs % rhs
+        elif operator == qasm3Parser.PLUS:
+            result = lhs + rhs
+        elif operator == qasm3Parser.MINUS:
+            result = lhs - rhs
+        else:
+            msg = f"Unknown operator: {ctx.getChild(1).symbol.text}"
+            raise NotImplementedError(msg)
+        result.ctx = ctx
+        return result

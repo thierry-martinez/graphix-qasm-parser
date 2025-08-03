@@ -63,3 +63,13 @@ circuit = parser.parse_file("my_circuit.qasm")
 | [rx](https://openqasm.com/language/standard_library.html#rx)     | RX                  |
 | [ry](https://openqasm.com/language/standard_library.html#ry)     | RY                  |
 | [rz](https://openqasm.com/language/standard_library.html#rz)     | RZ                  |
+
+### Expressions
+
+Expressions with arithmetic operators (`+`, `-`, `*`, `/`, `%`) are supported.
+The constant `pi` (or `π`) is defined.
+
+[Compile-time constants](https://openqasm.com/language/types.html#compile-time-constants)
+can be defined and used in expressions.
+
+

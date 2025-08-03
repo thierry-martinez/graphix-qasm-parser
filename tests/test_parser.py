@@ -107,3 +107,77 @@ rz(pi/4) q[0];
     assert math.isclose(instruction.angle, math.pi / 4)
     with pytest.raises(StopIteration):
         next(iterator)
+
+
+def test_parse_all_expressions() -> None:
+    """Test parse all expressions."""
+    s = """
+include "qelib1.inc";
+qubit q;
+rz((1)) q;
+rz(1.5) q;
+rz(- 1) q;
+rz(1 + 2) q;
+rz(1 - 2) q;
+rz(1 * 2) q;
+rz(1 / 2) q;
+rz(1 - (2 + 3)) q;
+rz(pi) q;
+rz(π) q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 1
+    iterator = iter(circuit.instruction)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 1)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 1.5)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, -1)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 1 + 2)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 1 - 2)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 1 * 2)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 1 / 2)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 1 - (2 + 3))
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, math.pi)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, math.pi)
+    with pytest.raises(StopIteration):
+        next(iterator)
+
+
+def test_const_declarations() -> None:
+    """Test constant declarations."""
+    s = """
+include "qelib1.inc";
+const int SIZE = 1;
+const angle alpha = pi / 4;
+qubit[SIZE] q;
+rz(alpha) q[0];
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 1
+    iterator = iter(circuit.instruction)
+    instruction = next(iterator)
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, math.pi / 4)
+    with pytest.raises(StopIteration):
+        next(iterator)
