@@ -53,12 +53,12 @@ class _Value:
 
 
 @dataclass
-class _Creg(_Value):
+class _Bit(_Value):
     index: int
 
 
 @dataclass
-class _Qreg(_Value):
+class _Qubit(_Value):
     index: int
 
 
@@ -79,25 +79,24 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     @override
     def visitOldStyleDeclarationStatement(self, ctx: qasm3Parser.OldStyleDeclarationStatementContext) -> None:
-        decl_class: type[_Creg | _Qreg]
-        value: _Value
+        decl_class: type[_Bit | _Qubit]
         kind = ctx.getChild(0)
         if kind.symbol.type == qasm3Parser.QREG:
-            decl_class = _Qreg
+            decl_class = _Qubit
         elif kind.symbol.type == qasm3Parser.CREG:
-            decl_class = _Creg
+            decl_class = _Bit
         else:
             msg = f"Unknown declaration statement kind: {kind}"
             raise NotImplementedError(msg)
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
-        if designator := ctx.designator():  # type: ignore[no-untyped-call]
-            count = self.evaluate_expression_int(designator.expression())
-            value = _Array([decl_class(self.width + i) for i in range(count)])
-            self.width += count
-        else:
-            value = decl_class(self.width)
-            self.width += 1
-        self.env[identifier] = value
+        designator = ctx.designator()  # type: ignore[no-untyped-call]
+        self.declare_registers(decl_class, identifier, designator)
+
+    @override
+    def visitQuantumDeclarationStatement(self, ctx: qasm3Parser.QuantumDeclarationStatementContext) -> None:
+        designator = ctx.qubitType().designator()  # type: ignore[no-untyped-call]
+        identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
+        self.declare_registers(_Qubit, identifier, designator)
 
     @override
     def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:  # noqa: C901, PLR0912
@@ -153,9 +152,23 @@ class _CircuitVisitor(qasm3ParserVisitor):
             raise NotImplementedError(msg)
         self.instructions.append(instruction)
 
+    def declare_registers(
+        self, decl_class: type[_Bit | _Qubit], identifier: str, designator: qasm3Parser.DesignatorContext | None
+    ) -> None:
+        value: _Value
+        if designator:
+            expression = designator.expression()  # type: ignore[no-untyped-call]
+            count = self.evaluate_expression_int(expression)
+            value = _Array([decl_class(self.width + i) for i in range(count)])
+            self.width += count
+        else:
+            value = decl_class(self.width)
+            self.width += 1
+        self.env[identifier] = value
+
     def convert_qubit_index(self, operand: qasm3Parser.GateOperandContext) -> int:
         value = self.evaluate_operand(operand)
-        if isinstance(value, _Qreg):
+        if isinstance(value, _Qubit):
             return value.index
         msg = f"Qubit expected: {operand}"
         raise ValueError(msg)
@@ -164,18 +177,23 @@ class _CircuitVisitor(qasm3ParserVisitor):
         child = operand.getChild(0)
         if child.getRuleIndex() == qasm3Parser.RULE_indexedIdentifier:
             identifier = child.Identifier().getText()
-            array = self.env[identifier]
-            if not isinstance(array, _Array):
-                msg = f"Array expected: {operand}"
-                raise TypeError(msg)
-            index = self.evaluate_expression_int(child.getChild(1).getChild(1))
-            if index < 0:
-                msg = f"Negative index: {operand}"
-                raise ValueError(msg)
-            if index >= len(array.values):
-                msg = f"Index out of bounds: {identifier} has length {len(array.values)}"
-                raise ValueError(msg)
-            return array.values[index]
+            value = self.env.get(identifier)
+            if value is None:
+                msg = f"name {identifier} is not defined"
+                raise NameError(msg)
+            for operator in child.indexOperator():
+                if not isinstance(value, _Array):
+                    msg = f"Array expected: {identifier}"
+                    raise TypeError(msg)
+                index = self.evaluate_expression_int(operator.expression(0))
+                if index < 0:
+                    msg = f"Negative index: {identifier}"
+                    raise IndexError(msg)
+                if index >= len(value.values):
+                    msg = f"Index out of bounds: {identifier} has length {len(value.values)}"
+                    raise IndexError(msg)
+                value = value.values[index]
+            return value
         msg = f"Unknown operand: {operand}"
         raise NotImplementedError(msg)
 

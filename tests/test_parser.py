@@ -12,8 +12,24 @@ def test_parse_simple_circuit() -> None:
     """Test parse simple circuit."""
     s = """
 include "qelib1.inc";
-qreg q[1];
-rz(5*pi/4) q[0];
+qubit q;
+rz(5*pi/4) q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 1
+    assert len(circuit.instruction) == 1
+    instruction = circuit.instruction[0]
+    assert isinstance(instruction, RZ)
+    assert math.isclose(instruction.angle, 5 * math.pi / 4)
+
+
+def test_parse_simple_circuit_old_syntax() -> None:
+    """Test parse simple circuit."""
+    s = """
+include "qelib1.inc";
+qreg q;
+rz(5*pi/4) q;
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)
@@ -28,7 +44,7 @@ def test_parse_all_instructions() -> None:  # noqa: PLR0915
     """Test parse all instructions."""
     s = """
 include "qelib1.inc";
-qreg q[3];
+qubit[3] q;
 ccx q[0], q[1], q[2];
 crz(pi/3) q[0], q[1];
 cx q[0], q[1];

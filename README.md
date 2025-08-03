@@ -1,45 +1,53 @@
 # Graphix OpenQASM Parser
 
-This repository provides the Python package `graphix-qasm-parser`,
-which is a plugin for the
-[`Graphix`](https://github.com/TeamGraphix/graphix/) library.
-This package provides a parser to read OpenQASM circuit specifications
-into `graphix.transpiler.Circuit`, that can in turn be transpiled
-by `Graphix` into MBQC patterns.
+`graphix-qasm-parser` is a plugin for the
+Graphix library that parses
+OpenQASM circuit specifications into
+`graphix.transpiler.Circuit` objects, which can then be transpiled
+into MBQC patterns.
 
-This functionality is provided as a plugin since this package relies on the additional dependency
+It is distributed as a separate plugin because it depends on
 [`openqasm-parser`](https://github.com/qat-inria/openqasm-parser/).
 
-## Getting Started
-
-To use the OpenQASM parser with Graphix:
-
-1. Install the plugin:
+## Installation
 
 ```bash
 pip install https://github.com/thierry-martinez/graphix-qasm-parser.git
 ```
 
-2. Instantiate a `OpenQASMParser` and use the `parse_str` method to
-   parse a given OpenQASM specification:
+## Usage
+
+### Parsing a string:
+
 ```python
+from graphix_qasm_parser import OpenQASMParser
+
 s = """
     include "qelib1.inc";
-    qreg q[1];
-    rz(5*pi/4) q[0];
+    qubit q;
+    rz(5*pi/4) q;
 """
 parser = OpenQASMParser()
 circuit = parser.parse_str(s)
 pattern = circuit.transpile().pattern
 print(pattern)
 ```
-   To parse a file, use the `parse_file` method.
 
-## Specification Support
+### Parsing a file:
 
-This package supports the definition of single qubit registers and qubit register arrays.
+```python
+circuit = parser.parse_file("my_circuit.qasm")
+```
 
-The following gates are supported:
+## Supported Specification
+
+### [Qubits](https://openqasm.com/language/types.html#qubits)
+
+- Single-qubit registers: `qubit q`, or the old syntax `qreg q`.
+
+- Qubit register arrays: `qubit[n] q`, or the old syntax `qreg q[n]`.
+
+### Supported Gates
 
 | OpenQASM gate                                                    | Graphix instruction |
 |------------------------------------------------------------------|---------------------|
