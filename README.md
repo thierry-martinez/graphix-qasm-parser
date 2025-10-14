@@ -60,6 +60,7 @@ circuit = parser.parse_file("my_circuit.qasm")
 | [x](https://openqasm.com/language/standard_library.html#x)       | X                   |
 | [y](https://openqasm.com/language/standard_library.html#y)       | Y                   |
 | [z](https://openqasm.com/language/standard_library.html#z)       | Z                   |
+| [id](https://openqasm.com/language/standard_library.html#id)     | I                   |
 | [rx](https://openqasm.com/language/standard_library.html#rx)     | RX                  |
 | [ry](https://openqasm.com/language/standard_library.html#ry)     | RY                  |
 | [rz](https://openqasm.com/language/standard_library.html#rz)     | RZ                  |
