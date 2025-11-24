@@ -7,7 +7,7 @@ maintainers = [
     { name = "Thierry Martinez", email = "Thierry.Martinez@inria.fr" },
 ]
 license-files = ["LICENSE"]
-version = "1"
+version = "0.1.0"
 dynamic = ["dependencies", "optional-dependencies"]
 
 [tool.setuptools.dynamic]
