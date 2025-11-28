@@ -13,7 +13,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     ParserRuleContext,
 )
 from graphix import Circuit
-from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, CZ, H, I, S, X, Y, Z
+from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, I, S, X, Y, Z
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
 # override introduced in Python 3.12
