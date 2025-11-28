@@ -13,7 +13,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     ParserRuleContext,
 )
 from graphix import Circuit
-from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, H, I, S, X, Y, Z
+from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, CZ, H, I, S, X, Y, Z
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
 # override introduced in Python 3.12
@@ -302,6 +302,9 @@ class _CircuitVisitor(qasm3ParserVisitor):
         elif gate == "swap":
             # https://openqasm.com/language/standard_library.html#swap
             instruction = SWAP(targets=(operands[0], operands[1]))
+        elif gate == "cz":
+            # https://openqasm.com/language/standard_library.html#cz
+            instruction = CZ(targets=(operands[0], operands[1]))
         elif gate == "h":
             # https://openqasm.com/language/standard_library.html#h
             instruction = H(target=operands[0])

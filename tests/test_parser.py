@@ -3,7 +3,7 @@
 import math
 
 import pytest
-from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
+from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
 
 from graphix_qasm_parser import OpenQASMParser
 
@@ -51,6 +51,7 @@ ccx q[0], q[1], q[2];
 crz(pi/3) q[0], q[1];
 cx q[0], q[1];
 swap q[0], q[1];
+cz q[0], q[1];
 h q[0];
 s q[0];
 x q[0];
@@ -80,6 +81,9 @@ rz(pi/4) q[0];
     assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, SWAP)
+    assert instruction.targets == (0, 1)
+    instruction = next(iterator)
+    assert isinstance(instruction, CZ)
     assert instruction.targets == (0, 1)
     instruction = next(iterator)
     assert isinstance(instruction, H)
