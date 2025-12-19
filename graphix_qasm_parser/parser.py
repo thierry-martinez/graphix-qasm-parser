@@ -13,6 +13,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     ParserRuleContext,
 )
 from graphix import Circuit
+from graphix.fundamentals import angle_of_rad
 from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, I, S, X, Y, Z
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
@@ -295,7 +296,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = CCX(target=operands[2], controls=(operands[0], operands[1]))
         elif gate == "crz":
             # https://openqasm.com/language/standard_library.html#crz
-            instruction = RZZ(target=operands[1], control=operands[0], angle=exprs[0])
+            instruction = RZZ(target=operands[1], control=operands[0], angle=angle_of_rad(exprs[0]))
         elif gate == "cx":
             # https://openqasm.com/language/standard_library.html#cx
             instruction = CNOT(target=operands[1], control=operands[0])
@@ -325,13 +326,16 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = I(target=operands[0])
         elif gate == "rx":
             # https://openqasm.com/language/standard_library.html#rx
-            instruction = RX(target=operands[0], angle=exprs[0])
+            print("rx", exprs[0], angle_of_rad(exprs[0]))
+            instruction = RX(target=operands[0], angle=angle_of_rad(exprs[0]))
         elif gate == "ry":
             # https://openqasm.com/language/standard_library.html#ry
-            instruction = RY(target=operands[0], angle=exprs[0])
+            print("ry", exprs[0], angle_of_rad(exprs[0]))
+            instruction = RY(target=operands[0], angle=angle_of_rad(exprs[0]))
         elif gate == "rz":
             # https://openqasm.com/language/standard_library.html#rz
-            instruction = RZ(target=operands[0], angle=exprs[0])
+            print("rz", exprs[0], angle_of_rad(exprs[0]))
+            instruction = RZ(target=operands[0], angle=angle_of_rad(exprs[0]))
         else:
             msg = f"Unknown gate: {gate}"
             raise NotImplementedError(msg)
