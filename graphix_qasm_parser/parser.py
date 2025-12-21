@@ -326,15 +326,12 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = I(target=operands[0])
         elif gate == "rx":
             # https://openqasm.com/language/standard_library.html#rx
-            print("rx", exprs[0], angle_of_rad(exprs[0]))
             instruction = RX(target=operands[0], angle=angle_of_rad(exprs[0]))
         elif gate == "ry":
             # https://openqasm.com/language/standard_library.html#ry
-            print("ry", exprs[0], angle_of_rad(exprs[0]))
             instruction = RY(target=operands[0], angle=angle_of_rad(exprs[0]))
         elif gate == "rz":
             # https://openqasm.com/language/standard_library.html#rz
-            print("rz", exprs[0], angle_of_rad(exprs[0]))
             instruction = RZ(target=operands[0], angle=angle_of_rad(exprs[0]))
         else:
             msg = f"Unknown gate: {gate}"
