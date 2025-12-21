@@ -4,21 +4,37 @@ import math
 from typing import TYPE_CHECKING
 
 import pytest
-from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
+from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
 
 from graphix_qasm_parser import OpenQASMParser
 
 if TYPE_CHECKING:
     from graphix.fundamentals import ANGLE_PI, angle_of_rad
+    from graphix.instruction import CZ
+
+    HAS_CZ = True
 else:
+    try:
+        from graphix.instruction import CZ
+
+        HAS_CZ = True
+    except ImportError:
+        HAS_CZ = False
+
+        # Compatibility with graphix <= 0.3.3
+        # See https://github.com/TeamGraphix/graphix/pull/379
+        def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
+            """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
+            msg = "CZ instructions are not supported by graphix <= 0.3.3"
+            raise NotImplementedError(msg)
+
     try:
         from graphix.fundamentals import ANGLE_PI, angle_of_rad
     except ImportError:
-        # Compatibility with graphix <= 0.3.3
-        # See https://github.com/TeamGraphix/graphix/pull/399
-
         from math import pi as ANGLE_PI  # noqa: N812
 
+        # Compatibility with graphix <= 0.3.3
+        # See https://github.com/TeamGraphix/graphix/pull/399
         def angle_of_rad(angle: float) -> float:
             """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
             return angle
@@ -67,7 +83,7 @@ ccx q[0], q[1], q[2];
 crz(pi/3) q[0], q[1];
 cx q[0], q[1];
 swap q[0], q[1];
-cz q[0], q[1];
+// cz q[0], q[1];
 h q[0];
 s q[0];
 x q[0];
@@ -99,9 +115,6 @@ rz(pi/4) q[0];
     assert isinstance(instruction, SWAP)
     assert instruction.targets == (0, 1)
     instruction = next(iterator)
-    assert isinstance(instruction, CZ)
-    assert instruction.targets == (0, 1)
-    instruction = next(iterator)
     assert isinstance(instruction, H)
     assert instruction.target == 0
     instruction = next(iterator)
@@ -131,6 +144,25 @@ rz(pi/4) q[0];
     assert instruction.target == 0
     assert isinstance(instruction.angle, float)
     assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    with pytest.raises(StopIteration):
+        next(iterator)
+
+
+@pytest.mark.skipif(not HAS_CZ, reason="CZ instructions are not supported by graphix <= 0.3.3")
+def test_parse_cz() -> None:
+    """Test parse CZ instructions."""
+    s = """
+include "qelib1.inc";
+qubit[2] q;
+cz q[0], q[1];
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 2
+    iterator = iter(circuit.instruction)
+    instruction = next(iterator)
+    assert isinstance(instruction, CZ)
+    assert instruction.targets == (0, 1)
     with pytest.raises(StopIteration):
         next(iterator)
 
