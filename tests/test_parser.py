@@ -1,12 +1,27 @@
 """Tests for Graphix QASM parser."""
 
 import math
+from typing import TYPE_CHECKING
 
 import pytest
-from graphix.fundamentals import ANGLE_PI, angle_of_rad
 from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
 
 from graphix_qasm_parser import OpenQASMParser
+
+if TYPE_CHECKING:
+    from graphix.fundamentals import ANGLE_PI, angle_of_rad
+else:
+    try:
+        from graphix.fundamentals import ANGLE_PI, angle_of_rad
+    except ImportError:
+        # Compatibility with graphix <= 0.3.3
+        # See https://github.com/TeamGraphix/graphix/pull/399
+
+        from math import pi as ANGLE_PI  # noqa: N812
+
+        def angle_of_rad(angle: float) -> float:
+            """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
+            return angle
 
 
 def test_parse_simple_circuit() -> None:

@@ -13,7 +13,6 @@ from antlr4 import (  # type: ignore[attr-defined]
     ParserRuleContext,
 )
 from graphix import Circuit
-from graphix.fundamentals import angle_of_rad
 from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, I, S, X, Y, Z
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
@@ -23,7 +22,17 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from graphix.fundamentals import angle_of_rad
     from graphix.instruction import Instruction
+else:
+    try:
+        from graphix.fundamentals import angle_of_rad
+    except ImportError:
+        # Compatibility with graphix <= 0.3.3
+        # See https://github.com/TeamGraphix/graphix/pull/399
+        def angle_of_rad(angle: float) -> float:
+            """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
+            return angle
 
 
 class OpenQASMParser:
