@@ -1,8 +1,10 @@
 """Tests for Graphix QASM parser."""
 
 import math
+from math import pi
 
 import pytest
+from graphix.fundamentals import ANGLE_PI, angle_of_rad
 from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
 
 from graphix_qasm_parser import OpenQASMParser
@@ -22,7 +24,7 @@ rz(5*pi/4) q;
     instruction = circuit.instruction[0]
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 5 * math.pi / 4)
+    assert math.isclose(instruction.angle, 5 * ANGLE_PI / 4)
 
 
 def test_parse_simple_circuit_old_syntax() -> None:
@@ -39,7 +41,7 @@ rz(5*pi/4) q;
     instruction = circuit.instruction[0]
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 5 * math.pi / 4)
+    assert math.isclose(instruction.angle, 5 * ANGLE_PI / 4)
 
 
 def test_parse_all_instructions() -> None:  # noqa: PLR0915
@@ -74,7 +76,7 @@ rz(pi/4) q[0];
     assert instruction.target == 1
     assert instruction.control == 0
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, math.pi / 3)
+    assert math.isclose(instruction.angle, ANGLE_PI / 3)
     instruction = next(iterator)
     assert isinstance(instruction, CNOT)
     assert instruction.target == 1
@@ -104,17 +106,17 @@ rz(pi/4) q[0];
     assert isinstance(instruction, RX)
     assert instruction.target == 0
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, math.pi / 4)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
     instruction = next(iterator)
     assert isinstance(instruction, RY)
     assert instruction.target == 0
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, math.pi / 4)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert instruction.target == 0
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, math.pi / 4)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
     with pytest.raises(StopIteration):
         next(iterator)
 
@@ -142,43 +144,43 @@ rz(π) q;
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 1)
+    assert math.isclose(instruction.angle, angle_of_rad(1))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 1.5)
+    assert math.isclose(instruction.angle, angle_of_rad(1.5))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, -1)
+    assert math.isclose(instruction.angle, angle_of_rad(-1))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 1 + 2)
+    assert math.isclose(instruction.angle, angle_of_rad(1 + 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 1 - 2)
+    assert math.isclose(instruction.angle, angle_of_rad(1 - 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 1 * 2)
+    assert math.isclose(instruction.angle, angle_of_rad(1 * 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 1 / 2)
+    assert math.isclose(instruction.angle, angle_of_rad(1 / 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, 1 - (2 + 3))
+    assert math.isclose(instruction.angle, angle_of_rad(1 - (2 + 3)))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, math.pi)
+    assert math.isclose(instruction.angle, ANGLE_PI)
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, math.pi)
+    assert math.isclose(instruction.angle, ANGLE_PI)
     with pytest.raises(StopIteration):
         next(iterator)
 
@@ -199,6 +201,6 @@ rz(alpha) q[0];
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, math.pi / 4)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
     with pytest.raises(StopIteration):
         next(iterator)
