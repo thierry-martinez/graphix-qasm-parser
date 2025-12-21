@@ -13,7 +13,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     ParserRuleContext,
 )
 from graphix import Circuit
-from graphix.instruction import CCX, CNOT, CZ, RX, RY, RZ, RZZ, SWAP, H, I, S, X, Y, Z
+from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, H, I, S, X, Y, Z
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
 # override introduced in Python 3.12
@@ -23,16 +23,26 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from graphix.fundamentals import angle_of_rad
-    from graphix.instruction import Instruction
+    from graphix.instruction import CZ, Instruction
 else:
     try:
-        from graphix.fundamentals import angle_of_rad
+        from graphix.instruction import CZ
     except ImportError:
         # Compatibility with graphix <= 0.3.3
         # See https://github.com/TeamGraphix/graphix/pull/399
         def angle_of_rad(angle: float) -> float:
             """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
             return angle
+
+    try:
+        from graphix.fundamentals import angle_of_rad
+    except ImportError:
+        # Compatibility with graphix <= 0.3.3
+        # See https://github.com/TeamGraphix/graphix/pull/379
+        def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
+            """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
+            msg = "CZ instructions are not supported by graphix <= 0.3.3"
+            raise NotImplementedError(msg)
 
 
 class OpenQASMParser:
