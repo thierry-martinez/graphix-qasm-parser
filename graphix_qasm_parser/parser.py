@@ -22,14 +22,23 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from graphix.fundamentals import angle_of_rad
-    from graphix.instruction import CZ, Instruction
+    from graphix.instruction import Instruction
+
+    # Compatibility with graphix <= 0.3.3
+    # See https://github.com/TeamGraphix/graphix/pull/379
+
+    ANGLE_PI: float
+
+    def angle_of_rad(angle: float) -> float:
+        """Prototype for angle_of_rad."""
+        ...
+
+    CZ = SWAP
 else:
     try:
         from graphix.instruction import CZ
     except ImportError:
-        # Compatibility with graphix <= 0.3.3
-        # See https://github.com/TeamGraphix/graphix/pull/379
+
         def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
             """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
             msg = "CZ instructions are not supported by graphix <= 0.3.3"

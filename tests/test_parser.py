@@ -9,9 +9,16 @@ from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
 from graphix_qasm_parser import OpenQASMParser
 
 if TYPE_CHECKING:
-    from graphix.fundamentals import ANGLE_PI, angle_of_rad
-    from graphix.instruction import CZ
+    # Compatibility with graphix <= 0.3.3
+    # See https://github.com/TeamGraphix/graphix/pull/379
 
+    ANGLE_PI: float
+
+    def angle_of_rad(angle: float) -> float:
+        """Prototype for angle_of_rad."""
+        ...
+
+    CZ = SWAP
     HAS_CZ = True
 else:
     try:
@@ -21,8 +28,6 @@ else:
     except ImportError:
         HAS_CZ = False
 
-        # Compatibility with graphix <= 0.3.3
-        # See https://github.com/TeamGraphix/graphix/pull/379
         def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
             """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
             msg = "CZ instructions are not supported by graphix <= 0.3.3"
