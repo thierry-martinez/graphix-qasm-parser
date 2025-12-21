@@ -1,7 +1,6 @@
 """Tests for Graphix QASM parser."""
 
 import math
-from math import pi
 
 import pytest
 from graphix.fundamentals import ANGLE_PI, angle_of_rad
