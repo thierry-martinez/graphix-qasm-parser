@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
     ANGLE_PI: float
 
-    def angle_of_rad(angle: float) -> float:
-        """Prototype for angle_of_rad."""
+    def rad_to_angle(angle: float) -> float:
+        """Prototype for rad_to_angle."""
         ...
 
     CZ = SWAP
@@ -34,13 +34,13 @@ else:
             raise NotImplementedError(msg)
 
     try:
-        from graphix.fundamentals import ANGLE_PI, angle_of_rad
+        from graphix.fundamentals import ANGLE_PI, rad_to_angle
     except ImportError:
         from math import pi as ANGLE_PI  # noqa: N812
 
         # Compatibility with graphix <= 0.3.3
         # See https://github.com/TeamGraphix/graphix/pull/399
-        def angle_of_rad(angle: float) -> float:
+        def rad_to_angle(angle: float) -> float:
             """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
             return angle
 
@@ -195,35 +195,35 @@ rz(π) q;
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(1))
+    assert math.isclose(instruction.angle, rad_to_angle(1))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(1.5))
+    assert math.isclose(instruction.angle, rad_to_angle(1.5))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(-1))
+    assert math.isclose(instruction.angle, rad_to_angle(-1))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(1 + 2))
+    assert math.isclose(instruction.angle, rad_to_angle(1 + 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(1 - 2))
+    assert math.isclose(instruction.angle, rad_to_angle(1 - 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(1 * 2))
+    assert math.isclose(instruction.angle, rad_to_angle(1 * 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(1 / 2))
+    assert math.isclose(instruction.angle, rad_to_angle(1 / 2))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, angle_of_rad(1 - (2 + 3)))
+    assert math.isclose(instruction.angle, rad_to_angle(1 - (2 + 3)))
     instruction = next(iterator)
     assert isinstance(instruction, RZ)
     assert isinstance(instruction.angle, float)

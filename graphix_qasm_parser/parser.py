@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 
     ANGLE_PI: float
 
-    def angle_of_rad(angle: float) -> float:
-        """Prototype for angle_of_rad."""
+    def rad_to_angle(angle: float) -> float:
+        """Prototype for rad_to_angle."""
         ...
 
     CZ = SWAP
@@ -45,11 +45,11 @@ else:
             raise NotImplementedError(msg)
 
     try:
-        from graphix.fundamentals import angle_of_rad
+        from graphix.fundamentals import rad_to_angle
     except ImportError:
         # Compatibility with graphix <= 0.3.3
         # See https://github.com/TeamGraphix/graphix/pull/399
-        def angle_of_rad(angle: float) -> float:
+        def rad_to_angle(angle: float) -> float:
             """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
             return angle
 
@@ -324,7 +324,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = CCX(target=operands[2], controls=(operands[0], operands[1]))
         elif gate == "crz":
             # https://openqasm.com/language/standard_library.html#crz
-            instruction = RZZ(target=operands[1], control=operands[0], angle=angle_of_rad(exprs[0]))
+            instruction = RZZ(target=operands[1], control=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "cx":
             # https://openqasm.com/language/standard_library.html#cx
             instruction = CNOT(target=operands[1], control=operands[0])
@@ -354,13 +354,13 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = I(target=operands[0])
         elif gate == "rx":
             # https://openqasm.com/language/standard_library.html#rx
-            instruction = RX(target=operands[0], angle=angle_of_rad(exprs[0]))
+            instruction = RX(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "ry":
             # https://openqasm.com/language/standard_library.html#ry
-            instruction = RY(target=operands[0], angle=angle_of_rad(exprs[0]))
+            instruction = RY(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "rz":
             # https://openqasm.com/language/standard_library.html#rz
-            instruction = RZ(target=operands[0], angle=angle_of_rad(exprs[0]))
+            instruction = RZ(target=operands[0], angle=rad_to_angle(exprs[0]))
         else:
             msg = f"Unknown gate: {gate}"
             raise NotImplementedError(msg)
