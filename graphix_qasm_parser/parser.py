@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     CZ = SWAP
 else:
+    ANGLE_PI = 1.0
     try:
         from graphix.instruction import CZ
     except ImportError:
@@ -49,6 +50,8 @@ else:
     except ImportError:
         # Compatibility with graphix <= 0.3.3
         # See https://github.com/TeamGraphix/graphix/pull/399
+        ANGLE_PI = math.pi
+
         def rad_to_angle(angle: float) -> float:
             """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
             return angle
@@ -278,7 +281,9 @@ class _CircuitVisitor(qasm3ParserVisitor):
         }
 
     @override
-    def visitOldStyleDeclarationStatement(self, ctx: qasm3Parser.OldStyleDeclarationStatementContext) -> None:
+    def visitOldStyleDeclarationStatement(
+        self, ctx: qasm3Parser.OldStyleDeclarationStatementContext
+    ) -> None:
         decl_class: type[_Bit | _Qubit]
         kind = ctx.getChild(0)
         if kind.symbol.type == qasm3Parser.QREG:
@@ -293,13 +298,17 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.declare_registers(ctx, decl_class, identifier, designator)
 
     @override
-    def visitQuantumDeclarationStatement(self, ctx: qasm3Parser.QuantumDeclarationStatementContext) -> None:
+    def visitQuantumDeclarationStatement(
+        self, ctx: qasm3Parser.QuantumDeclarationStatementContext
+    ) -> None:
         designator = ctx.qubitType().designator()  # type: ignore[no-untyped-call]
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         self.declare_registers(ctx, _Qubit, identifier, designator)
 
     @override
-    def visitConstDeclarationStatement(self, ctx: qasm3Parser.ConstDeclarationStatementContext) -> None:
+    def visitConstDeclarationStatement(
+        self, ctx: qasm3Parser.ConstDeclarationStatementContext
+    ) -> None:
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         value = ctx.declarationExpression()  # type: ignore[no-untyped-call]
         expr = self.evaluate_expression(value)
@@ -310,11 +319,13 @@ class _CircuitVisitor(qasm3ParserVisitor):
         gate = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         operand_list = ctx.gateOperandList()  # type: ignore[no-untyped-call]
         operands = [
-            self.convert_qubit_index(operand_list.getChild(i)) for i in range(0, operand_list.getChildCount(), 2)
+            self.convert_qubit_index(operand_list.getChild(i))
+            for i in range(0, operand_list.getChildCount(), 2)
         ]
         if expr_list := ctx.expressionList():  # type: ignore[no-untyped-call]
             exprs = [
-                float(self.evaluate_expression(expr_list.getChild(i))) for i in range(0, expr_list.getChildCount(), 2)
+                float(self.evaluate_expression(expr_list.getChild(i)))
+                for i in range(0, expr_list.getChildCount(), 2)
             ]
         else:
             exprs = []
@@ -324,7 +335,9 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = CCX(target=operands[2], controls=(operands[0], operands[1]))
         elif gate == "crz":
             # https://openqasm.com/language/standard_library.html#crz
-            instruction = RZZ(target=operands[1], control=operands[0], angle=rad_to_angle(exprs[0]))
+            instruction = RZZ(
+                target=operands[1], control=operands[0], angle=rad_to_angle(exprs[0])
+            )
         elif gate == "cx":
             # https://openqasm.com/language/standard_library.html#cx
             instruction = CNOT(target=operands[1], control=operands[0])
@@ -433,7 +446,9 @@ class _ExpressionVisitor(qasm3ParserVisitor):
         return value
 
     @override
-    def visitParenthesisExpression(self, ctx: qasm3Parser.ParenthesisExpressionContext) -> _Value:
+    def visitParenthesisExpression(
+        self, ctx: qasm3Parser.ParenthesisExpressionContext
+    ) -> _Value:
         expr: qasm3Parser.ExpressionContext = ctx.expression()  # type: ignore[no-untyped-call]
         return self.parse(expr)
 
@@ -450,15 +465,21 @@ class _ExpressionVisitor(qasm3ParserVisitor):
         raise NotImplementedError(msg)
 
     @override
-    def visitAdditiveExpression(self, ctx: qasm3Parser.AdditiveExpressionContext) -> _Value:
+    def visitAdditiveExpression(
+        self, ctx: qasm3Parser.AdditiveExpressionContext
+    ) -> _Value:
         return self.parse_binary_operator(ctx)
 
     @override
-    def visitMultiplicativeExpression(self, ctx: qasm3Parser.MultiplicativeExpressionContext) -> _Value:
+    def visitMultiplicativeExpression(
+        self, ctx: qasm3Parser.MultiplicativeExpressionContext
+    ) -> _Value:
         return self.parse_binary_operator(ctx)
 
     @override
-    def visitLiteralExpression(self, ctx: qasm3Parser.LiteralExpressionContext) -> _Value:
+    def visitLiteralExpression(
+        self, ctx: qasm3Parser.LiteralExpressionContext
+    ) -> _Value:
         literal = ctx.getChild(0)
         if literal.symbol.type == qasm3Parser.DecimalIntegerLiteral:
             return _Int(ctx, int(literal.symbol.text))
@@ -472,7 +493,9 @@ class _ExpressionVisitor(qasm3ParserVisitor):
         raise NotImplementedError(msg)
 
     def parse_binary_operator(
-        self, ctx: qasm3Parser.AdditiveExpressionContext | qasm3Parser.MultiplicativeExpressionContext
+        self,
+        ctx: qasm3Parser.AdditiveExpressionContext
+        | qasm3Parser.MultiplicativeExpressionContext,
     ) -> _Value:
         lhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(0)
         rhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(2)
