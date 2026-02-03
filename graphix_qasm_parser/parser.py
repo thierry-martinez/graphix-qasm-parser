@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 
     CZ = SWAP
 else:
-    ANGLE_PI = 1.0
     try:
         from graphix.instruction import CZ
     except ImportError:
@@ -46,7 +45,7 @@ else:
             raise NotImplementedError(msg)
 
     try:
-        from graphix.fundamentals import rad_to_angle
+        from graphix.fundamentals import ANGLE_PI, rad_to_angle
     except ImportError:
         # Compatibility with graphix <= 0.3.3
         # See https://github.com/TeamGraphix/graphix/pull/399

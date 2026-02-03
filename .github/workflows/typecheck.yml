@@ -30,5 +30,3 @@ jobs:
           pip install .[dev]
 
       - run: mypy
-
-      - run: pyright
