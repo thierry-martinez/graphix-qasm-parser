@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=77", "wheel", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "graphix-qasm-parser"
 authors = [
@@ -7,8 +11,10 @@ maintainers = [
     { name = "Thierry Martinez", email = "Thierry.Martinez@inria.fr" },
 ]
 license-files = ["LICENSE"]
-version = "0.1.0"
-dynamic = ["dependencies", "optional-dependencies"]
+dynamic = ["version", "dependencies", "optional-dependencies"]
+
+[tool.setuptools_scm]
+version_file = "graphix_qasm_parser/_version.py"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }

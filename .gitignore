@@ -1,2 +1,3 @@
 __pycache__/
 /graphix_qasm_parser.egg-info/
+/graphix_qasm_parser/_version.py
