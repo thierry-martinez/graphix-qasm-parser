@@ -4,7 +4,7 @@ import math
 from typing import TYPE_CHECKING
 
 import pytest
-from graphix.instruction import CCX, CNOT, RX, RY, RZ, RZZ, SWAP, H, S, X, Y, Z
+from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, H, S, X, Y, Z
 
 from graphix_qasm_parser import OpenQASMParser
 
@@ -85,7 +85,6 @@ def test_parse_all_instructions() -> None:  # noqa: PLR0915
 include "qelib1.inc";
 qubit[3] q;
 ccx q[0], q[1], q[2];
-crz(pi/3) q[0], q[1];
 cx q[0], q[1];
 swap q[0], q[1];
 // cz q[0], q[1];
@@ -106,12 +105,6 @@ rz(pi/4) q[0];
     assert isinstance(instruction, CCX)
     assert instruction.target == 2
     assert instruction.controls == (0, 1)
-    instruction = next(iterator)
-    assert isinstance(instruction, RZZ)
-    assert instruction.target == 1
-    assert instruction.control == 0
-    assert isinstance(instruction.angle, float)
-    assert math.isclose(instruction.angle, ANGLE_PI / 3)
     instruction = next(iterator)
     assert isinstance(instruction, CNOT)
     assert instruction.target == 1

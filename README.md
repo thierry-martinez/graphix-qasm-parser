@@ -52,7 +52,6 @@ circuit = parser.parse_file("my_circuit.qasm")
 | OpenQASM gate                                                    | Graphix instruction |
 |------------------------------------------------------------------|---------------------|
 | [ccx](https://openqasm.com/language/standard_library.html#ccx)   | CCX                 |
-| [crz](https://openqasm.com/language/standard_library.html#crz)   | RZZ                 |
 | [cx](https://openqasm.com/language/standard_library.html#cx)     | CNOT                |
 | [swap](https://openqasm.com/language/standard_library.html#swap) | SWAP                |
 | [cz](https://openqasm.com/language/standard_library.html#cz)     | CZ                  |
