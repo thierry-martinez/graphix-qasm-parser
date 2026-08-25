@@ -53,9 +53,9 @@ else:
 
     try:
         from graphix import Instruction
-        from graphix.instruction import P
 
-        P  # Use symbol for ruff
+        _ = Instruction.P
+
         HAS_OPENQASM_GATES = True
     except ImportError:
         HAS_OPENQASM_GATES = False
@@ -137,7 +137,6 @@ rz(pi/4) q[0];
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)
-    print(circuit.instruction)
     assert circuit.width == 3
     iterator = iter(circuit.instruction)
     instruction = next(iterator)
@@ -205,7 +204,7 @@ cz q[0], q[1];
 
 
 @pytest.mark.skipif(not HAS_OPENQASM_GATES, reason="OpenQASM gates are not supported by graphix <= 0.4")
-def test_parse_openqasm_gates() -> None:
+def test_parse_openqasm_gates() -> None:  # noqa: PLR0915
     """Test gates introduced for OpenQASM compatibility."""
     s = """
 include "qelib1.inc";
@@ -228,7 +227,6 @@ gphase(pi/3);
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)
-    print(circuit.instruction)
     assert circuit.width == 3
     iterator = iter(circuit.instruction)
     instruction = next(iterator)
