@@ -6,3 +6,5 @@ ruff==0.12.5
 # Tests
 nox==2025.5.1
 pytest
+
+graphix@git+https://github.com/thierry-martinez/graphix@add_openqasm_gates
