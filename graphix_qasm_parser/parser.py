@@ -12,7 +12,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     InputStream,
     ParserRuleContext,
 )
-from graphix import Circuit, Instruction
+from graphix import Circuit
 from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, H, I, S, X, Y, Z
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
@@ -21,6 +21,9 @@ from typing_extensions import override
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from graphix import Instruction
+    from graphix.instruction import InstructionType
 
     # Compatibility with graphix <= 0.3.3
     # See https://github.com/TeamGraphix/graphix/pull/379
@@ -43,6 +46,7 @@ else:
             raise NotImplementedError(msg)
 
     try:
+        from graphix import Instruction
         from graphix.fundamentals import ANGLE_PI, rad_to_angle
     except ImportError:
         # Compatibility with graphix <= 0.3.3
@@ -265,7 +269,7 @@ class _Array(_Value):
 class _CircuitVisitor(qasm3ParserVisitor):
     parser: OpenQASMParser
     width: int
-    instructions: list[Instruction]
+    instructions: list[InstructionType]
     env: dict[str, _Value]
 
     def __init__(self, parser: OpenQASMParser) -> None:
@@ -318,7 +322,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
             ]
         else:
             exprs = []
-        instruction: Instruction
+        instruction: InstructionType
         if ctx.GPHASE():  # type: ignore[no-untyped-call]
             # https://openqasm.com/language/gates.html#gphase
             instruction = Instruction.GPHASE(angle=rad_to_angle(exprs[0]))
