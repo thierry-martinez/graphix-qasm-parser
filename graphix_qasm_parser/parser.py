@@ -22,8 +22,6 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from graphix.instruction import Instruction
-
     # Compatibility with graphix <= 0.3.3
     # See https://github.com/TeamGraphix/graphix/pull/379
 
@@ -313,7 +311,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         pass
 
     @override
-    def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:  # noqa: C901, PLR0912
+    def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:  # noqa: C901, PLR0912, PLR0915
         if expr_list := ctx.expressionList():  # type: ignore[no-untyped-call]
             exprs = [
                 float(self.evaluate_expression(expr_list.getChild(i))) for i in range(0, expr_list.getChildCount(), 2)
