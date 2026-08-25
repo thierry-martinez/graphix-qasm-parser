@@ -57,7 +57,7 @@ else:
         _ = Instruction.P
 
         HAS_OPENQASM_GATES = True
-    except ImportError:
+    except (AttributeError, ImportError):
         HAS_OPENQASM_GATES = False
 
         if TYPE_CHECKING:
