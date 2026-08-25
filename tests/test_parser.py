@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     # Compatibility with graphix <= 0.3.3
     # See https://github.com/TeamGraphix/graphix/pull/379
 
+    from graphix import Instruction
+
     ANGLE_PI: float
 
     def rad_to_angle(angle: float) -> float:
@@ -20,6 +22,8 @@ if TYPE_CHECKING:
 
     CZ = SWAP
     HAS_CZ = True
+
+    HAS_OPENQASM_GATES = True
 else:
     try:
         from graphix.instruction import CZ
@@ -28,21 +32,40 @@ else:
     except ImportError:
         HAS_CZ = False
 
-        def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
-            """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
-            msg = "CZ instructions are not supported by graphix <= 0.3.3"
-            raise NotImplementedError(msg)
+        if TYPE_CHECKING:
+            import sys
+
+            # We skip type-checking since pyright cannot figure out that
+            # tests are skipped in this case.
+            sys.exit(1)
 
     try:
         from graphix.fundamentals import ANGLE_PI, rad_to_angle
     except ImportError:
         from math import pi as ANGLE_PI  # noqa: N812
 
-        # Compatibility with graphix <= 0.3.3
-        # See https://github.com/TeamGraphix/graphix/pull/399
-        def rad_to_angle(angle: float) -> float:
-            """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
-            return angle
+        if TYPE_CHECKING:
+            import sys
+
+            # We skip type-checking since pyright cannot figure out that
+            # tests are skipped in this case.
+            sys.exit(1)
+
+    try:
+        from graphix import Instruction
+        from graphix.instruction import P
+
+        P  # Use symbol for ruff
+        HAS_OPENQASM_GATES = True
+    except ImportError:
+        HAS_OPENQASM_GATES = False
+
+        if TYPE_CHECKING:
+            import sys
+
+            # We skip type-checking since pyright cannot figure out that
+            # tests are skipped in this case.
+            sys.exit(1)
 
 
 def test_parse_simple_circuit() -> None:
@@ -79,26 +102,42 @@ rz(5*pi/4) q;
     assert math.isclose(instruction.angle, 5 * ANGLE_PI / 4)
 
 
-def test_parse_all_instructions() -> None:  # noqa: PLR0915
+def test_parse_all_instructions() -> None:
     """Test parse all instructions."""
     s = """
 include "qelib1.inc";
 qubit[3] q;
 ccx q[0], q[1], q[2];
 cx q[0], q[1];
-swap q[0], q[1];
+// cy q[0], q[1];
 // cz q[0], q[1];
+swap q[0], q[1];
+// cswap q[0], q[1], q[2];
 h q[0];
 s q[0];
+// sdg q[0];
+// t q[0];
+// tdg q[0];
+// sx q[0];
+// sxdg q[0];
 x q[0];
 y q[0];
 z q[0];
+// p(pi/4) q[0];
 rx(pi/4) q[0];
 ry(pi/4) q[0];
 rz(pi/4) q[0];
+// U(pi/4, pi/5, pi/6) q[0];
+// cp(pi/4) q[0], q[1];
+// crx(pi/4) q[0], q[1];
+// cry(pi/4) q[0], q[1];
+// crz(pi/4) q[0], q[1];
+// cu(pi/4, pi/5, pi/6, pi/7) q[0], q[1];
+// gphase(pi/3);
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)
+    print(circuit.instruction)
     assert circuit.width == 3
     iterator = iter(circuit.instruction)
     instruction = next(iterator)
@@ -161,6 +200,113 @@ cz q[0], q[1];
     instruction = next(iterator)
     assert isinstance(instruction, CZ)
     assert instruction.targets == (0, 1)
+    with pytest.raises(StopIteration):
+        next(iterator)
+
+
+@pytest.mark.skipif(not HAS_OPENQASM_GATES, reason="OpenQASM gates are not supported by graphix <= 0.4")
+def test_parse_openqasm_gates() -> None:
+    """Test gates introduced for OpenQASM compatibility."""
+    s = """
+include "qelib1.inc";
+qubit[3] q;
+cy q[0], q[1];
+cswap q[0], q[1], q[2];
+sdg q[0];
+t q[0];
+tdg q[0];
+sx q[0];
+sxdg q[0];
+p(pi/4) q[0];
+U(pi/4, pi/5, pi/6) q[0];
+cp(pi/4) q[0], q[1];
+crx(pi/4) q[0], q[1];
+cry(pi/4) q[0], q[1];
+crz(pi/4) q[0], q[1];
+cu(pi/4, pi/5, pi/6, pi/7) q[0], q[1];
+gphase(pi/3);
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    print(circuit.instruction)
+    assert circuit.width == 3
+    iterator = iter(circuit.instruction)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CY)
+    assert instruction.target == 1
+    assert instruction.control == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CSWAP)
+    assert instruction.control == 0
+    assert instruction.targets == (1, 2)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.SDG)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.T)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.TDG)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.SX)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.SXDG)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.P)
+    assert instruction.target == 0
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.U)
+    assert instruction.target == 0
+    assert isinstance(instruction.theta, float)
+    assert math.isclose(instruction.theta, ANGLE_PI / 4)
+    assert isinstance(instruction.phi, float)
+    assert math.isclose(instruction.phi, ANGLE_PI / 5)
+    assert isinstance(instruction.lambda_, float)
+    assert math.isclose(instruction.lambda_, ANGLE_PI / 6)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CP)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CRX)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CRY)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CRZ)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CU)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.theta, float)
+    assert math.isclose(instruction.theta, ANGLE_PI / 4)
+    assert isinstance(instruction.phi, float)
+    assert math.isclose(instruction.phi, ANGLE_PI / 5)
+    assert isinstance(instruction.lambda_, float)
+    assert math.isclose(instruction.lambda_, ANGLE_PI / 6)
+    assert isinstance(instruction.gamma, float)
+    assert math.isclose(instruction.gamma, ANGLE_PI / 7)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.GPHASE)
+    assert instruction.angle == ANGLE_PI / 3
     with pytest.raises(StopIteration):
         next(iterator)
 

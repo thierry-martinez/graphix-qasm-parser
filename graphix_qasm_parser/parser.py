@@ -12,7 +12,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     InputStream,
     ParserRuleContext,
 )
-from graphix import Circuit
+from graphix import Circuit, Instruction
 from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, H, I, S, X, Y, Z
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
@@ -308,12 +308,12 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.env[identifier] = expr
 
     @override
+    def visitGateStatement(self, ctx: qasm3Parser.GateStatementContext) -> None:
+        # Currently, gate statements are ignored.
+        pass
+
+    @override
     def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:  # noqa: C901, PLR0912
-        gate = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
-        operand_list = ctx.gateOperandList()  # type: ignore[no-untyped-call]
-        operands = [
-            self.convert_qubit_index(operand_list.getChild(i)) for i in range(0, operand_list.getChildCount(), 2)
-        ]
         if expr_list := ctx.expressionList():  # type: ignore[no-untyped-call]
             exprs = [
                 float(self.evaluate_expression(expr_list.getChild(i))) for i in range(0, expr_list.getChildCount(), 2)
@@ -321,15 +321,31 @@ class _CircuitVisitor(qasm3ParserVisitor):
         else:
             exprs = []
         instruction: Instruction
+        if ctx.GPHASE():  # type: ignore[no-untyped-call]
+            # https://openqasm.com/language/gates.html#gphase
+            instruction = Instruction.GPHASE(angle=rad_to_angle(exprs[0]))
+            self.instructions.append(instruction)
+            return
+        gate = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
+        operand_list = ctx.gateOperandList()  # type: ignore[no-untyped-call]
+        operands = [
+            self.convert_qubit_index(operand_list.getChild(i)) for i in range(0, operand_list.getChildCount(), 2)
+        ]
         if gate == "ccx":
             # https://openqasm.com/language/standard_library.html#ccx
             instruction = CCX(target=operands[2], controls=(operands[0], operands[1]))
         elif gate == "cx":
             # https://openqasm.com/language/standard_library.html#cx
             instruction = CNOT(target=operands[1], control=operands[0])
+        elif gate == "cy":
+            # https://openqasm.com/language/standard_library.html#cy
+            instruction = Instruction.CY(target=operands[1], control=operands[0])
         elif gate == "swap":
             # https://openqasm.com/language/standard_library.html#swap
             instruction = SWAP(targets=(operands[0], operands[1]))
+        elif gate == "cswap":
+            # https://openqasm.com/language/standard_library.html#cswap
+            instruction = Instruction.CSWAP(control=operands[0], targets=(operands[1], operands[2]))
         elif gate == "cz":
             # https://openqasm.com/language/standard_library.html#cz
             instruction = CZ(targets=(operands[0], operands[1]))
@@ -339,6 +355,21 @@ class _CircuitVisitor(qasm3ParserVisitor):
         elif gate == "s":
             # https://openqasm.com/language/standard_library.html#s
             instruction = S(target=operands[0])
+        elif gate == "sdg":
+            # https://openqasm.com/language/standard_library.html#sdg
+            instruction = Instruction.SDG(target=operands[0])
+        elif gate == "t":
+            # https://openqasm.com/language/standard_library.html#t
+            instruction = Instruction.T(target=operands[0])
+        elif gate == "tdg":
+            # https://openqasm.com/language/standard_library.html#tdg
+            instruction = Instruction.TDG(target=operands[0])
+        elif gate == "sx":
+            # https://openqasm.com/language/standard_library.html#sx
+            instruction = Instruction.SX(target=operands[0])
+        elif gate == "sxdg":
+            # https://openqasm.com/language/standard_library.html#sxdg
+            instruction = Instruction.SXDG(target=operands[0])
         elif gate == "x":
             # https://openqasm.com/language/standard_library.html#x
             instruction = X(target=operands[0])
@@ -351,6 +382,10 @@ class _CircuitVisitor(qasm3ParserVisitor):
         elif gate == "id":
             # https://openqasm.com/language/standard_library.html#id
             instruction = I(target=operands[0])
+        elif gate in {"p", "u1"}:
+            # https://openqasm.com/language/standard_library.html#p
+            # https://openqasm.com/language/standard_library.html#u1
+            instruction = Instruction.P(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "rx":
             # https://openqasm.com/language/standard_library.html#rx
             instruction = RX(target=operands[0], angle=rad_to_angle(exprs[0]))
@@ -360,10 +395,62 @@ class _CircuitVisitor(qasm3ParserVisitor):
         elif gate == "rz":
             # https://openqasm.com/language/standard_library.html#rz
             instruction = RZ(target=operands[0], angle=rad_to_angle(exprs[0]))
+        elif gate == "cp":
+            # https://openqasm.com/language/standard_library.html#cp
+            instruction = Instruction.CP(control=operands[0], target=operands[1], angle=rad_to_angle(exprs[0]))
+        elif gate == "crx":
+            # https://openqasm.com/language/standard_library.html#crx
+            instruction = Instruction.CRX(control=operands[0], target=operands[1], angle=rad_to_angle(exprs[0]))
+        elif gate == "cry":
+            # https://openqasm.com/language/standard_library.html#cry
+            instruction = Instruction.CRY(control=operands[0], target=operands[1], angle=rad_to_angle(exprs[0]))
+        elif gate == "crz":
+            # https://openqasm.com/language/standard_library.html#crz
+            instruction = Instruction.CRZ(control=operands[0], target=operands[1], angle=rad_to_angle(exprs[0]))
+        elif gate == "U":
+            # https://openqasm.com/language/gates.html#U
+            instruction = Instruction.U(
+                target=operands[0],
+                theta=rad_to_angle(exprs[0]),
+                phi=rad_to_angle(exprs[1]),
+                lambda_=rad_to_angle(exprs[2]),
+            )
+        elif gate == "cu":
+            # https://openqasm.com/language/standard_library.html#cu
+            instruction = Instruction.CU(
+                control=operands[0],
+                target=operands[1],
+                theta=rad_to_angle(exprs[0]),
+                phi=rad_to_angle(exprs[1]),
+                lambda_=rad_to_angle(exprs[2]),
+                gamma=rad_to_angle(exprs[3]),
+            )
+        elif gate == "u2":
+            # https://openqasm.com/language/standard_library.html#u2
+            self.u3(
+                target=operands[0],
+                theta=ANGLE_PI / 2,
+                phi=rad_to_angle(exprs[1]),
+                lambda_=rad_to_angle(exprs[2]),
+            )
+            return
+        elif gate == "u3":
+            # https://openqasm.com/language/standard_library.html#u3
+            self.u3(
+                target=operands[0],
+                theta=rad_to_angle(exprs[0]),
+                phi=rad_to_angle(exprs[1]),
+                lambda_=rad_to_angle(exprs[2]),
+            )
+            return
         else:
             msg = f"Unknown gate: {gate}"
             raise NotImplementedError(msg)
         self.instructions.append(instruction)
+
+    def u3(self, target: int, theta: float, phi: float, lambda_: float) -> None:
+        self.instructions.append(Instruction.U(target=target, theta=theta, phi=phi, lambda_=lambda_))
+        self.instructions.append(Instruction.GPHASE(-(theta + phi + lambda_) / 2))
 
     def declare_registers(
         self,
