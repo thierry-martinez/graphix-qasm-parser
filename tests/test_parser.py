@@ -4,7 +4,7 @@ import math
 from typing import TYPE_CHECKING
 
 import pytest
-from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, H, S, X, Y, Z
+from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, Axis, H, M, S, X, Y, Z
 
 from graphix_qasm_parser import OpenQASMParser
 
@@ -79,7 +79,7 @@ rz(5*pi/4) q;
     assert math.isclose(instruction.angle, 5 * ANGLE_PI / 4)
 
 
-def test_parse_all_instructions() -> None:  # noqa: PLR0915
+def test_parse_all_instructions() -> None:
     """Test parse all instructions."""
     s = """
 include "qelib1.inc";
@@ -248,3 +248,34 @@ rz(alpha) q[0];
     assert math.isclose(instruction.angle, ANGLE_PI / 4)
     with pytest.raises(StopIteration):
         next(iterator)
+
+
+def test_measurement() -> None:
+    """Test measurement."""
+    s = """
+include "stdgates.inc";
+qubit q;
+bit b;
+b = measure q;
+qreg qo;
+creg bo;
+measure qo -> bo;
+qubit[2] qr;
+bit[2] br;
+br[0] = measure qr[0];
+br[1] = measure qr[1];
+qreg qr2[2];
+creg br2[2];
+br2 = measure qr2;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 6
+    assert circuit.instruction == [
+        M(0, Axis.Z),
+        M(1, Axis.Z),
+        M(2, Axis.Z),
+        M(3, Axis.Z),
+        M(4, Axis.Z),
+        M(5, Axis.Z),
+    ]

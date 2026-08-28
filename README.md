@@ -47,6 +47,12 @@ circuit = parser.parse_file("my_circuit.qasm")
 
 - Qubit register arrays: `qubit[n] q`, or the old syntax `qreg q[n]`.
 
+### [Classical bits](https://openqasm.com/language/types.html#classical-bits-and-registers)
+
+- Single-bit registers: `bit b`, or the old syntax `creg b`.
+
+- Bit register arrays: `bit[n] b`, or the old syntax `creg q[n]`.
+
 ### Supported Gates
 
 | OpenQASM gate                                                    | Graphix instruction |
@@ -73,4 +79,9 @@ The constant `pi` (or `π`) is defined.
 [Compile-time constants](https://openqasm.com/language/types.html#compile-time-constants)
 can be defined and used in expressions.
 
+### [Measurements](https://openqasm.com/language/insts.html#measurement)
 
+Measurements of the form `bit = measure qubit;`, or the old syntax
+`measure qubit -> bit`, are supported.
+
+Both arguments must be registers of the same size, or both must be bit/qubit types.

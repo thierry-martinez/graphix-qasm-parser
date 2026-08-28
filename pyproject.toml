@@ -24,6 +24,7 @@ dev = { file = ["requirements-dev.txt"] }
 
 [tool.ruff]
 line-length = 120
+extend-exclude = ["build"]
 
 [tool.ruff.lint]
 select = ["ALL"]
