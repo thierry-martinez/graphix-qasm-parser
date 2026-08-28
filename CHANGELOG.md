@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - #12, #13: Remove incorrect parsing of `crz` gates (@clebrin)
 
-- #3, #14: Support for measurements
+- #3, #16: Support for measurements
 
 ## [0.1.1] - 2026-02-05
 
