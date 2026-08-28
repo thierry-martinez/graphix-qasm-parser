@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import enum
 import math
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from antlr4 import (  # type: ignore[attr-defined]
     CommonTokenStream,
@@ -27,6 +28,10 @@ if TYPE_CHECKING:
 
     from graphix.instruction import InstructionType
 
+_T = TypeVar("_T")
+
+
+if TYPE_CHECKING:
     # Compatibility with graphix <= 0.3.3
     # See https://github.com/TeamGraphix/graphix/pull/379
 
@@ -34,13 +39,19 @@ if TYPE_CHECKING:
 
     def rad_to_angle(angle: float) -> float:
         """Prototype for rad_to_angle."""
-        ...
 
     CZ = SWAP
+    HAS_CZ = True
+
+    def CONDINSTR(instructions: tuple[InstructionType, ...], domain: set[int]) -> InstructionType:  # noqa: N802
+        """Prototype for CONDINSTR."""
 else:
     try:
         from graphix.instruction import CZ
+
+        HAS_CZ = True
     except ImportError:
+        HAS_CZ = False
 
         def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
             """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
@@ -58,6 +69,18 @@ else:
         def rad_to_angle(angle: float) -> float:
             """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
             return angle
+
+    try:
+        from graphix.instruction import CONDINSTR
+
+        HAS_CONDINSTR = True
+    except ImportError:
+        HAS_CONDINSTR = False
+
+        def CONDINSTR(instructions: tuple[InstructionType, ...], domain: set[int]) -> InstructionType:  # noqa: N802
+            """In older versions of graphix (<= 0.4), CONDINSTR instructions were not supported."""
+            msg = "CONDINSTR instructions are not supported by graphix <= 0.4"
+            raise NotImplementedError(msg)
 
 
 class OpenQASMParser:
@@ -132,6 +155,18 @@ class _Value:
     def as_qubit(self) -> _Qubit:
         if not isinstance(self, _Qubit):
             msg = f"Qubit expected: {self.report_ctx()}"
+            raise TypeError(msg)
+        return self
+
+    def as_bit(self) -> _Bit:
+        if not isinstance(self, _Bit):
+            msg = f"Bit expected: {self.report_ctx()}"
+            raise TypeError(msg)
+        return self
+
+    def as_array(self) -> _Array:
+        if not isinstance(self, _Array):
+            msg = f"Array expected: {self.report_ctx()}"
             raise TypeError(msg)
         return self
 
@@ -271,6 +306,12 @@ class _DeclKind(Enum):
 class _Bit(_Value):
     index: int | None = None
 
+    def as_measured(self) -> int:
+        if self.index is None:
+            msg = f"Bit should have been assigned to a measurement: {self.report_ctx()}"
+            raise ValueError(msg)
+        return self.index
+
 
 @dataclass
 class _Qubit(_Value):
@@ -409,6 +450,22 @@ class _CircuitVisitor(qasm3ParserVisitor):
         measure_expression = ctx.measureExpression()  # type: ignore[no-untyped-call]
         self.add_measurement_statement(indexed_identifier, measure_expression)
 
+    @override
+    def visitIfStatement(self, ctx: qasm3Parser.IfStatementContext) -> None:
+        expression = ctx.expression()  # type: ignore[no-untyped-call]
+        if ctx.ELSE():  # type: ignore[no-untyped-call]
+            msg = "If-else statements are not yet supported."
+            raise NotImplementedError(msg)
+        statement_or_scope = ctx.statementOrScope(0)
+        domain = self.evaluate_domain(expression)
+        parent_instructions = self.instructions
+        self.instructions = []
+        statement_or_scope.accept(self)
+        body = tuple(self.instructions)
+        instruction = CONDINSTR(body, domain)
+        self.instructions = parent_instructions
+        self.instructions.append(instruction)
+
     def add_measurement_statement(
         self,
         indexed_identifier: qasm3Parser.IndexedIdentifierContext,
@@ -482,40 +539,103 @@ class _CircuitVisitor(qasm3ParserVisitor):
             msg = f"name {identifier} is not defined"
             raise NameError(msg)
         for operator in indexed_identifier.indexOperator():
-            if not isinstance(value, _Array):
-                msg = f"Array expected: {identifier}"
-                raise TypeError(msg)
+            array = value.as_array()
             index = int(self.evaluate_expression(operator.expression(0)))
-            if index < 0:
-                msg = f"Negative index: {identifier}"
-                raise IndexError(msg)
-            if index >= len(value.values):
-                msg = f"Index out of bounds: {identifier} has length {len(value.values)}"
-                raise IndexError(msg)
-            value = value.values[index]
+            identifier = _check_index(index, identifier, len(array.values))
+            value = array.values[index]
         return value
 
     def evaluate_expression(self, expr: qasm3Parser.ExpressionContext) -> _Value:
-        return _ExpressionVisitor(self).parse(expr)
+        return _ValueVisitor(self).parse(expr)
+
+    def evaluate_domain(self, expr: qasm3Parser.ExpressionContext) -> set[int]:
+        return _DomainVisitor(self).parse(expr)
 
 
-class _ExpressionVisitor(qasm3ParserVisitor):
-    circuit: _CircuitVisitor
+def _check_index(index: int, identifier: str, length: int) -> str:
+    if index < 0:
+        msg = f"Negative index: {identifier}"
+        raise IndexError(msg)
+    if index >= length:
+        msg = f"Index out of bounds: {identifier} has length {length}"
+        raise IndexError(msg)
+    return f"{identifier}[index]"
 
+
+class _ExpressionVisitor(ABC, qasm3ParserVisitor, Generic[_T]):
     def __init__(self, circuit: _CircuitVisitor) -> None:
         self.circuit = circuit
 
-    def parse(self, expr: qasm3Parser.ExpressionContext) -> _Value:
-        value: _Value | None = expr.accept(self)
+    def parse(self, expr: qasm3Parser.ExpressionContext) -> _T:
+        value: _T | None = expr.accept(self)
         if value is None:
             msg = f"Cannot parse value: {expr.getText()}"
             raise NotImplementedError(msg)
         return value
 
     @override
-    def visitParenthesisExpression(self, ctx: qasm3Parser.ParenthesisExpressionContext) -> _Value:
+    def visitParenthesisExpression(self, ctx: qasm3Parser.ParenthesisExpressionContext) -> _T:
         expr: qasm3Parser.ExpressionContext = ctx.expression()  # type: ignore[no-untyped-call]
         return self.parse(expr)
+
+    @override
+    def visitAdditiveExpression(self, ctx: qasm3Parser.AdditiveExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitMultiplicativeExpression(self, ctx: qasm3Parser.MultiplicativeExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitBitshiftExpressionExpression(self, ctx: qasm3Parser.BitshiftExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitComparisonExpression(self, ctx: qasm3Parser.ComparisonExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitEqualityExpression(self, ctx: qasm3Parser.EqualityExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitBitwiseAndExpression(self, ctx: qasm3Parser.BitwiseAndExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitBitwiseXorExpression(self, ctx: qasm3Parser.BitwiseXorExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitBitwiseOrExpression(self, ctx: qasm3Parser.BitwiseOrExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitLogicalAndExpression(self, ctx: qasm3Parser.LogicalAndExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @override
+    def visitLogicalOrExpression(self, ctx: qasm3Parser.LogicalOrExpressionContext) -> _T:
+        return self.parse_binary_operator(ctx)
+
+    @abstractmethod
+    def parse_binary_operator(
+        self,
+        ctx: qasm3Parser.AdditiveExpressionContext
+        | qasm3Parser.MultiplicativeExpressionContext
+        | qasm3Parser.BitshiftExpressionContext
+        | qasm3Parser.ComparisonExpressionContext
+        | qasm3Parser.EqualityExpressionContext
+        | qasm3Parser.BitwiseAndExpressionContext
+        | qasm3Parser.BitwiseXorExpressionContext
+        | qasm3Parser.BitwiseOrExpressionContext,
+    ) -> _T: ...
+
+
+class _ValueVisitor(_ExpressionVisitor[_Value]):
+    # Needed for mypy to instantiate `_T`
+    def __init__(self, circuit: _CircuitVisitor) -> None:
+        super().__init__(circuit)
 
     @override
     def visitUnaryExpression(self, ctx: qasm3Parser.UnaryExpressionContext) -> _Value:
@@ -538,6 +658,19 @@ class _ExpressionVisitor(qasm3ParserVisitor):
         return self.parse_binary_operator(ctx)
 
     @override
+    def visitIndexExpression(self, ctx: qasm3Parser.IndexExpressionContext) -> _Value:
+        expression = ctx.expression()  # type: ignore[no-untyped-call]
+        identifier = expression.getText()
+        value = self.parse(expression)
+        index_operator = ctx.indexOperator()  # type: ignore[no-untyped-call]
+        for index_expr in index_operator.expression():
+            array = value.as_array()
+            index = int(self.parse(index_expr))
+            identifier = _check_index(index, identifier, len(array.values))
+            value = array.values[index]
+        return value
+
+    @override
     def visitLiteralExpression(self, ctx: qasm3Parser.LiteralExpressionContext) -> _Value:
         literal = ctx.getChild(0)
         if literal.symbol.type == qasm3Parser.DecimalIntegerLiteral:
@@ -551,9 +684,17 @@ class _ExpressionVisitor(qasm3ParserVisitor):
         msg = f"Unknown literal: {literal.symbol.text}"
         raise NotImplementedError(msg)
 
+    @override
     def parse_binary_operator(
         self,
-        ctx: qasm3Parser.AdditiveExpressionContext | qasm3Parser.MultiplicativeExpressionContext,
+        ctx: qasm3Parser.AdditiveExpressionContext
+        | qasm3Parser.MultiplicativeExpressionContext
+        | qasm3Parser.BitshiftExpressionContext
+        | qasm3Parser.ComparisonExpressionContext
+        | qasm3Parser.EqualityExpressionContext
+        | qasm3Parser.BitwiseAndExpressionContext
+        | qasm3Parser.BitwiseXorExpressionContext
+        | qasm3Parser.BitwiseOrExpressionContext,
     ) -> _Value:
         lhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(0)
         rhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(2)
@@ -574,4 +715,49 @@ class _ExpressionVisitor(qasm3ParserVisitor):
             msg = f"Unknown operator: {ctx.getChild(1).symbol.text}"
             raise NotImplementedError(msg)
         result.ctx = ctx
+        return result
+
+
+class _DomainVisitor(_ExpressionVisitor[set[int]]):
+    # Needed for mypy to instantiate `_T`
+    def __init__(self, circuit: _CircuitVisitor) -> None:
+        super().__init__(circuit)
+
+    @override
+    def visitUnaryExpression(self, ctx: qasm3Parser.UnaryExpressionContext) -> set[int]:
+        msg = f"Unknown operator: {ctx.getChild(0).symbol.text}"
+        raise NotImplementedError(msg)
+
+    @override
+    def visitLiteralExpression(self, ctx: qasm3Parser.LiteralExpressionContext) -> set[int]:
+        value = _ValueVisitor(self.circuit).visitLiteralExpression(ctx)
+        return {value.as_bit().as_measured()}
+
+    @override
+    def visitIndexExpression(self, ctx: qasm3Parser.IndexExpressionContext) -> set[int]:
+        value = _ValueVisitor(self.circuit).visitIndexExpression(ctx)
+        return {value.as_bit().as_measured()}
+
+    @override
+    def parse_binary_operator(
+        self,
+        ctx: qasm3Parser.AdditiveExpressionContext
+        | qasm3Parser.MultiplicativeExpressionContext
+        | qasm3Parser.BitshiftExpressionContext
+        | qasm3Parser.ComparisonExpressionContext
+        | qasm3Parser.EqualityExpressionContext
+        | qasm3Parser.BitwiseAndExpressionContext
+        | qasm3Parser.BitwiseXorExpressionContext
+        | qasm3Parser.BitwiseOrExpressionContext,
+    ) -> set[int]:
+        lhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(0)
+        rhs_expr: qasm3Parser.ExpressionContext = ctx.getChild(2)
+        lhs = self.parse(lhs_expr)
+        rhs = self.parse(rhs_expr)
+        operator = ctx.getChild(1).symbol.type
+        if operator == qasm3Parser.CARET:
+            result = lhs | rhs
+        else:
+            msg = f"Unknown operator: {ctx.getChild(1).symbol.text}"
+            raise NotImplementedError(msg)
         return result

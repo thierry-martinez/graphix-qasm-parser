@@ -1,48 +1,14 @@
 """Tests for Graphix QASM parser."""
 
+from __future__ import annotations
+
 import math
-from typing import TYPE_CHECKING
 
 import pytest
 from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, Axis, H, M, S, X, Y, Z
 
 from graphix_qasm_parser import OpenQASMParser
-
-if TYPE_CHECKING:
-    # Compatibility with graphix <= 0.3.3
-    # See https://github.com/TeamGraphix/graphix/pull/379
-
-    ANGLE_PI: float
-
-    def rad_to_angle(angle: float) -> float:
-        """Prototype for rad_to_angle."""
-        ...
-
-    CZ = SWAP
-    HAS_CZ = True
-else:
-    try:
-        from graphix.instruction import CZ
-
-        HAS_CZ = True
-    except ImportError:
-        HAS_CZ = False
-
-        def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
-            """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
-            msg = "CZ instructions are not supported by graphix <= 0.3.3"
-            raise NotImplementedError(msg)
-
-    try:
-        from graphix.fundamentals import ANGLE_PI, rad_to_angle
-    except ImportError:
-        from math import pi as ANGLE_PI  # noqa: N812
-
-        # Compatibility with graphix <= 0.3.3
-        # See https://github.com/TeamGraphix/graphix/pull/399
-        def rad_to_angle(angle: float) -> float:
-            """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
-            return angle
+from graphix_qasm_parser.parser import ANGLE_PI, CONDINSTR, CZ, HAS_CONDINSTR, HAS_CZ, rad_to_angle
 
 
 def test_parse_simple_circuit() -> None:
@@ -278,4 +244,38 @@ br2 = measure qr2;
         M(3, Axis.Z),
         M(4, Axis.Z),
         M(5, Axis.Z),
+    ]
+
+
+@pytest.mark.skipif(not HAS_CONDINSTR, reason="CONDINSTR instructions are not supported by graphix <= 0.4")
+def test_if_statements() -> None:
+    """Test if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+if (b[0]) {
+    x q[0];
+}
+b[1] = measure q[0];
+if (b[0] ^ b[1]) {
+    x q[1];
+    z q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        M(2, Axis.Z),
+        CONDINSTR((X(0),), {2}),
+        M(0, Axis.Z),
+        CONDINSTR(
+            (
+                X(1),
+                Z(1),
+            ),
+            {0, 2},
+        ),
     ]
