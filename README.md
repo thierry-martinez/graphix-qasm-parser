@@ -73,4 +73,6 @@ The constant `pi` (or `π`) is defined.
 [Compile-time constants](https://openqasm.com/language/types.html#compile-time-constants)
 can be defined and used in expressions.
 
+### [Gate definitions](https://openqasm.com/language/gates.html#defining-gates)
 
+User gates can be defined with `gate name(parameters) qubits { ... }`.

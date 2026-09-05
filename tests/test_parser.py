@@ -79,7 +79,7 @@ rz(5*pi/4) q;
     assert math.isclose(instruction.angle, 5 * ANGLE_PI / 4)
 
 
-def test_parse_all_instructions() -> None:  # noqa: PLR0915
+def test_parse_all_instructions() -> None:
     """Test parse all instructions."""
     s = """
 include "qelib1.inc";
@@ -248,3 +248,30 @@ rz(alpha) q[0];
     assert math.isclose(instruction.angle, ANGLE_PI / 4)
     with pytest.raises(StopIteration):
         next(iterator)
+
+
+def test_gate_definition() -> None:
+    """Test gate definition."""
+    # Excerpt of https://openqasm.com/language/gates.html#defining-gates
+    s = """
+qubit[2] q;
+gate cphase(θ) a, b
+{
+  rz(θ / 2) a;
+  cx a, b;
+  rz(-θ / 2) b;
+  cx a, b;
+  rz(θ / 2) b;
+}
+cphase(π / 2) q[0], q[1];
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 2
+    assert circuit.instruction == [
+        RZ(0, ANGLE_PI / 4),
+        CNOT(control=0, target=1),
+        RZ(1, -ANGLE_PI / 4),
+        CNOT(control=0, target=1),
+        RZ(1, ANGLE_PI / 4),
+    ]
