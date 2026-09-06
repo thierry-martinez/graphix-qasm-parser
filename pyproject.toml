@@ -13,7 +13,7 @@ maintainers = [
 license-files = ["LICENSE"]
 dynamic = ["version"]
 dependencies = [
-    "graphix@git+https://github.com/thierry-martinez/graphix@add_openqasm_gates",
+    "graphix@git+https://github.com/thierry-martinez/graphix.git@add_openqasm_gates",
     "openqasm-parser>=3.1.0",
 ]
 
