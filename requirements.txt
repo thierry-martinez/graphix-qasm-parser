@@ -1,2 +1,0 @@
-graphix>=0.3.3
-openqasm-parser>=3.1.0
