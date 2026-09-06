@@ -12,8 +12,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     InputStream,
     ParserRuleContext,
 )
-from graphix import Circuit
-from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, H, I, S, X, Y, Z
+from graphix import ANGLE_PI, Circuit, Instruction, rad_to_angle
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
 # override introduced in Python 3.12
@@ -22,40 +21,7 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from graphix import Instruction
     from graphix.instruction import InstructionType
-
-    # Compatibility with graphix <= 0.3.3
-    # See https://github.com/TeamGraphix/graphix/pull/379
-
-    ANGLE_PI: float
-
-    def rad_to_angle(angle: float) -> float:
-        """Prototype for rad_to_angle."""
-        ...
-
-    CZ = SWAP
-else:
-    try:
-        from graphix.instruction import CZ
-    except ImportError:
-
-        def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
-            """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
-            msg = "CZ instructions are not supported by graphix <= 0.3.3"
-            raise NotImplementedError(msg)
-
-    try:
-        from graphix import Instruction
-        from graphix.fundamentals import ANGLE_PI, rad_to_angle
-    except ImportError:
-        # Compatibility with graphix <= 0.3.3
-        # See https://github.com/TeamGraphix/graphix/pull/399
-        ANGLE_PI = math.pi
-
-        def rad_to_angle(angle: float) -> float:
-            """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
-            return angle
 
 
 class OpenQASMParser:
@@ -335,28 +301,28 @@ class _CircuitVisitor(qasm3ParserVisitor):
         ]
         if gate == "ccx":
             # https://openqasm.com/language/standard_library.html#ccx
-            instruction = CCX(target=operands[2], controls=(operands[0], operands[1]))
+            instruction = Instruction.CCX(target=operands[2], controls=(operands[0], operands[1]))
         elif gate == "cx":
             # https://openqasm.com/language/standard_library.html#cx
-            instruction = CNOT(target=operands[1], control=operands[0])
+            instruction = Instruction.CNOT(target=operands[1], control=operands[0])
         elif gate == "cy":
             # https://openqasm.com/language/standard_library.html#cy
             instruction = Instruction.CY(target=operands[1], control=operands[0])
         elif gate == "swap":
             # https://openqasm.com/language/standard_library.html#swap
-            instruction = SWAP(targets=(operands[0], operands[1]))
+            instruction = Instruction.SWAP(targets=(operands[0], operands[1]))
         elif gate == "cswap":
             # https://openqasm.com/language/standard_library.html#cswap
             instruction = Instruction.CSWAP(control=operands[0], targets=(operands[1], operands[2]))
         elif gate == "cz":
             # https://openqasm.com/language/standard_library.html#cz
-            instruction = CZ(targets=(operands[0], operands[1]))
+            instruction = Instruction.CZ(targets=(operands[0], operands[1]))
         elif gate == "h":
             # https://openqasm.com/language/standard_library.html#h
-            instruction = H(target=operands[0])
+            instruction = Instruction.H(target=operands[0])
         elif gate == "s":
             # https://openqasm.com/language/standard_library.html#s
-            instruction = S(target=operands[0])
+            instruction = Instruction.S(target=operands[0])
         elif gate == "sdg":
             # https://openqasm.com/language/standard_library.html#sdg
             instruction = Instruction.SDG(target=operands[0])
@@ -374,29 +340,29 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = Instruction.SXDG(target=operands[0])
         elif gate == "x":
             # https://openqasm.com/language/standard_library.html#x
-            instruction = X(target=operands[0])
+            instruction = Instruction.X(target=operands[0])
         elif gate == "y":
             # https://openqasm.com/language/standard_library.html#y
-            instruction = Y(target=operands[0])
+            instruction = Instruction.Y(target=operands[0])
         elif gate == "z":
             # https://openqasm.com/language/standard_library.html#z
-            instruction = Z(target=operands[0])
+            instruction = Instruction.Z(target=operands[0])
         elif gate == "id":
             # https://openqasm.com/language/standard_library.html#id
-            instruction = I(target=operands[0])
+            instruction = Instruction.I(target=operands[0])
         elif gate in {"p", "u1"}:
             # https://openqasm.com/language/standard_library.html#p
             # https://openqasm.com/language/standard_library.html#u1
             instruction = Instruction.P(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "rx":
             # https://openqasm.com/language/standard_library.html#rx
-            instruction = RX(target=operands[0], angle=rad_to_angle(exprs[0]))
+            instruction = Instruction.RX(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "ry":
             # https://openqasm.com/language/standard_library.html#ry
-            instruction = RY(target=operands[0], angle=rad_to_angle(exprs[0]))
+            instruction = Instruction.RY(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "rz":
             # https://openqasm.com/language/standard_library.html#rz
-            instruction = RZ(target=operands[0], angle=rad_to_angle(exprs[0]))
+            instruction = Instruction.RZ(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "cp":
             # https://openqasm.com/language/standard_library.html#cp
             instruction = Instruction.CP(control=operands[0], target=operands[1], angle=rad_to_angle(exprs[0]))
