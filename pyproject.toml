@@ -13,7 +13,7 @@ maintainers = [
 license-files = ["LICENSE"]
 dynamic = ["version"]
 dependencies = [
-    "graphix@git+https://github.com/thierry-martinez/graphix.git@add_openqasm_gates",
+    "graphix>=0.4",
     "openqasm-parser>=3.1.0",
 ]
 
@@ -83,3 +83,6 @@ reportUnknownLambdaType = "information"
 #reportUnknownMemberType = "information"
 # reportUnknownParameterType = "information"
 # reportUnknownVariableType = "information"
+
+[tool.uv.sources]
+graphix = { git = "https://github.com/thierry-martinez/graphix.git", branch = "add_openqasm_gates" }
