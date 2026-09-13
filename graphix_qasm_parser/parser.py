@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import enum
 import math
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from antlr4 import (  # type: ignore[attr-defined]
@@ -12,7 +14,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     InputStream,
     ParserRuleContext,
 )
-from graphix import ANGLE_PI, Circuit, Instruction, rad_to_angle
+from graphix import ANGLE_PI, Axis, Circuit, Instruction, rad_to_angle
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
 # override introduced in Python 3.12
@@ -86,12 +88,21 @@ class _Value:
         return NotImplemented
 
     def __int__(self) -> int:
-        msg = "Not an integer value: {ctx.getText() if isinstance(ctx, ParserRuleContext) else ctx}"
+        msg = f"Not an integer value: {self.report_ctx()}"
         raise TypeError(msg)
 
     def __float__(self) -> float:
-        msg = "Not a floating-point value: {ctx.getText() if isinstance(ctx, ParserRuleContext) else ctx}"
+        msg = f"Not a floating-point value: {self.report_ctx()}"
         raise TypeError(msg)
+
+    def as_qubit(self) -> _Qubit:
+        if not isinstance(self, _Qubit):
+            msg = f"Qubit expected: {self.report_ctx()}"
+            raise TypeError(msg)
+        return self
+
+    def report_ctx(self) -> str:
+        return self.ctx.getText() if isinstance(self.ctx, ParserRuleContext) else self.ctx  # type: ignore[union-attr,arg-type]
 
 
 @dataclass
@@ -217,9 +228,33 @@ class _Float(_Value):
         return self.value
 
 
+class _DeclKind(Enum):
+    Bit = enum.auto()
+    Qubit = enum.auto()
+
+
 @dataclass
 class _Bit(_Value):
-    index: int
+    index: int | None = None
+    """The index of the measurement.
+
+    In Graphix circuits, measurement outcomes are indexed by the rank
+    of the measurement (the index of the outcome of the first
+    measurement is 0, the index of the outcome of the second
+    measurement is 1, etc.). Each time a measurement outcome is stored
+    in a bit register in the QASM file, the index of the outcome is
+    stored in this field, so that when the bit register is referenced
+    subsequently, we can retrieve the index of the corresponding
+    measurement.
+
+    ``None`` means that no measurement outcome has been assigned to
+    the bit register yet.
+
+    Note that bit registers cannot be referenced yet, since we do not
+    support conditional instructions yet. Support for conditional
+    instructions will be introduced in
+    https://github.com/TeamGraphix/graphix-qasm-parser/pull/17.
+    """
 
 
 @dataclass
@@ -235,12 +270,14 @@ class _Array(_Value):
 class _CircuitVisitor(qasm3ParserVisitor):
     parser: OpenQASMParser
     width: int
+    measurement_count: int
     instructions: list[InstructionType]
     env: dict[str, _Value]
 
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
         self.width = 0
+        self.measurement_count = 0
         self.instructions = []
         self.env = {
             "pi": _Float("pi", math.pi),
@@ -249,24 +286,33 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     @override
     def visitOldStyleDeclarationStatement(self, ctx: qasm3Parser.OldStyleDeclarationStatementContext) -> None:
-        decl_class: type[_Bit | _Qubit]
         kind = ctx.getChild(0)
         if kind.symbol.type == qasm3Parser.QREG:
-            decl_class = _Qubit
+            decl_kind = _DeclKind.Qubit
         elif kind.symbol.type == qasm3Parser.CREG:
-            decl_class = _Bit
+            decl_kind = _DeclKind.Bit
         else:
             msg = f"Unknown declaration statement kind: {kind}"
             raise NotImplementedError(msg)
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         designator = ctx.designator()  # type: ignore[no-untyped-call]
-        self.declare_registers(ctx, decl_class, identifier, designator)
+        self.declare_registers(ctx, decl_kind, identifier, designator)
 
     @override
     def visitQuantumDeclarationStatement(self, ctx: qasm3Parser.QuantumDeclarationStatementContext) -> None:
         designator = ctx.qubitType().designator()  # type: ignore[no-untyped-call]
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
-        self.declare_registers(ctx, _Qubit, identifier, designator)
+        self.declare_registers(ctx, _DeclKind.Qubit, identifier, designator)
+
+    @override
+    def visitClassicalDeclarationStatement(self, ctx: qasm3Parser.ClassicalDeclarationStatementContext) -> None:
+        scalar_type = ctx.scalarType()  # type: ignore[no-untyped-call]
+        if scalar_type is None or scalar_type.BIT() is None:
+            msg = "Only bit type is supported."
+            raise NotImplementedError(msg)
+        identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
+        designator = scalar_type.designator()
+        self.declare_registers(ctx, _DeclKind.Bit, identifier, designator)
 
     @override
     def visitConstDeclarationStatement(self, ctx: qasm3Parser.ConstDeclarationStatementContext) -> None:
@@ -420,10 +466,64 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.instructions.append(Instruction.U(target=target, theta=theta, phi=phi, lambda_=lambda_))
         self.instructions.append(Instruction.GPHASE(-(theta + phi + lambda_) / 2))
 
+    @override
+    def visitAssignmentStatement(self, ctx: qasm3Parser.AssignmentStatementContext) -> None:
+        measure_expression = ctx.measureExpression()  # type: ignore[no-untyped-call]
+        if measure_expression is None:
+            msg = "Only measure assignments are supported."
+            raise NotImplementedError(msg)
+        indexed_identifier = ctx.indexedIdentifier()  # type: ignore[no-untyped-call]
+        self.add_measurement_statement(indexed_identifier, measure_expression)
+
+    @override
+    def visitMeasureArrowAssignmentStatement(self, ctx: qasm3Parser.MeasureArrowAssignmentStatementContext) -> None:
+        indexed_identifier = ctx.indexedIdentifier()  # type: ignore[no-untyped-call]
+        measure_expression = ctx.measureExpression()  # type: ignore[no-untyped-call]
+        self.add_measurement_statement(indexed_identifier, measure_expression)
+
+    def add_measurement_statement(
+        self,
+        indexed_identifier: qasm3Parser.IndexedIdentifierContext,
+        measure_expression: qasm3Parser.MeasureExpressionContext,
+    ) -> None:
+        target_bit = self.evaluate_indexed_identifier(indexed_identifier)
+        gate_operand = measure_expression.gateOperand()  # type: ignore[no-untyped-call]
+        target_qubit = self.evaluate_operand(gate_operand)
+        if isinstance(target_bit, _Array) or isinstance(target_qubit, _Array):
+            if not isinstance(target_bit, _Array) or not isinstance(target_qubit, _Array):
+                msg = "Both arguments must be registers, or both must be bit/qubit types."
+                raise TypeError(msg)
+            if len(target_bit.values) != len(target_qubit.values):
+                msg = "Both registers must have the same size."
+                raise ValueError(msg)
+            for bit, qubit in zip(target_bit.values, target_qubit.values, strict=True):
+                self.add_measurement(bit, qubit)
+            return
+        self.add_measurement(target_bit, target_qubit)
+
+    def add_measurement(self, target_bit: _Value, target_qubit: _Value) -> None:
+        if not isinstance(target_bit, _Bit):
+            msg = f"Only assignment to bit is supported: {target_bit} unexpected."
+            raise NotImplementedError(msg)
+        qubit_index = target_qubit.as_qubit().index
+        instruction = Instruction.M(qubit_index, Axis.Z)
+        self.instructions.append(instruction)
+        target_bit.index = qubit_index
+        self.measurement_count += 1
+
+    def declare_register(self, ctx: ParserRuleContext, decl_kind: _DeclKind) -> _Value:  # type: ignore[valid-type]
+        match decl_kind:
+            case _DeclKind.Bit:
+                value: _Value = _Bit(ctx)
+            case _DeclKind.Qubit:
+                value = _Qubit(ctx, self.width)
+                self.width += 1
+        return value
+
     def declare_registers(
         self,
         ctx: ParserRuleContext,  # type: ignore[valid-type]
-        decl_class: type[_Bit | _Qubit],
+        decl_kind: _DeclKind,
         identifier: str,
         designator: qasm3Parser.DesignatorContext | None,
     ) -> None:
@@ -431,43 +531,41 @@ class _CircuitVisitor(qasm3ParserVisitor):
         if designator:
             expression = designator.expression()  # type: ignore[no-untyped-call]
             count = int(self.evaluate_expression(expression))
-            value = _Array(ctx, [decl_class(ctx, self.width + i) for i in range(count)])
-            self.width += count
+            value = _Array(ctx, [self.declare_register(ctx, decl_kind) for i in range(count)])
         else:
-            value = decl_class(ctx, self.width)
-            self.width += 1
+            value = self.declare_register(ctx, decl_kind)
         self.env[identifier] = value
 
     def convert_qubit_index(self, operand: qasm3Parser.GateOperandContext) -> int:
         value = self.evaluate_operand(operand)
-        if isinstance(value, _Qubit):
-            return value.index
-        msg = f"Qubit expected: {operand}"
-        raise ValueError(msg)
+        return value.as_qubit().index
 
     def evaluate_operand(self, operand: qasm3Parser.GateOperandContext) -> _Value:
         child = operand.getChild(0)
         if child.getRuleIndex() == qasm3Parser.RULE_indexedIdentifier:
-            identifier = child.Identifier().getText()
-            value = self.env.get(identifier)
-            if value is None:
-                msg = f"name {identifier} is not defined"
-                raise NameError(msg)
-            for operator in child.indexOperator():
-                if not isinstance(value, _Array):
-                    msg = f"Array expected: {identifier}"
-                    raise TypeError(msg)
-                index = int(self.evaluate_expression(operator.expression(0)))
-                if index < 0:
-                    msg = f"Negative index: {identifier}"
-                    raise IndexError(msg)
-                if index >= len(value.values):
-                    msg = f"Index out of bounds: {identifier} has length {len(value.values)}"
-                    raise IndexError(msg)
-                value = value.values[index]
-            return value
+            return self.evaluate_indexed_identifier(child)
         msg = f"Unknown operand: {operand}"
         raise NotImplementedError(msg)
+
+    def evaluate_indexed_identifier(self, indexed_identifier: qasm3Parser.IndexedIdentifierContext) -> _Value:
+        identifier = indexed_identifier.Identifier().getText()  # type: ignore[no-untyped-call]
+        value = self.env.get(identifier)
+        if value is None:
+            msg = f"name {identifier} is not defined"
+            raise NameError(msg)
+        for operator in indexed_identifier.indexOperator():
+            if not isinstance(value, _Array):
+                msg = f"Array expected: {identifier}"
+                raise TypeError(msg)
+            index = int(self.evaluate_expression(operator.expression(0)))
+            if index < 0:
+                msg = f"Negative index: {identifier}"
+                raise IndexError(msg)
+            if index >= len(value.values):
+                msg = f"Index out of bounds: {identifier} has length {len(value.values)}"
+                raise IndexError(msg)
+            value = value.values[index]
+        return value
 
     def evaluate_expression(self, expr: qasm3Parser.ExpressionContext) -> _Value:
         return _ExpressionVisitor(self).parse(expr)
