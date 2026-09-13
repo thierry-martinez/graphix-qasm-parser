@@ -15,9 +15,8 @@ from antlr4 import (  # type: ignore[attr-defined]
     InputStream,
     ParserRuleContext,
 )
-from graphix import Circuit
-from graphix.fundamentals import Axis
-from graphix.instruction import CCX, CNOT, RX, RY, RZ, SWAP, H, I, M, S, X, Y, Z
+from graphix import Circuit, Instruction
+from graphix.fundamentals import Axis, rad_to_angle
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
 # override introduced in Python 3.12
@@ -28,59 +27,8 @@ if TYPE_CHECKING:
 
     from graphix.instruction import InstructionType
 
+
 _T = TypeVar("_T")
-
-
-if TYPE_CHECKING:
-    # Compatibility with graphix <= 0.3.3
-    # See https://github.com/TeamGraphix/graphix/pull/379
-
-    ANGLE_PI: float
-
-    def rad_to_angle(angle: float) -> float:
-        """Prototype for rad_to_angle."""
-
-    CZ = SWAP
-    HAS_CZ = True
-
-    def CONDINSTR(instructions: tuple[InstructionType, ...], domain: set[int]) -> InstructionType:  # noqa: N802
-        """Prototype for CONDINSTR."""
-else:
-    try:
-        from graphix.instruction import CZ
-
-        HAS_CZ = True
-    except ImportError:
-        HAS_CZ = False
-
-        def CZ(_q0: int, _q1: int) -> None:  # noqa: N802
-            """In older versions of graphix (<= 0.3.3), CZ instructions were not supported."""
-            msg = "CZ instructions are not supported by graphix <= 0.3.3"
-            raise NotImplementedError(msg)
-
-    try:
-        from graphix.fundamentals import ANGLE_PI as ANGLE_PI  # noqa: PLC0414
-        from graphix.fundamentals import rad_to_angle
-    except ImportError:
-        # Compatibility with graphix <= 0.3.3
-        # See https://github.com/TeamGraphix/graphix/pull/399
-        ANGLE_PI = math.pi
-
-        def rad_to_angle(angle: float) -> float:
-            """In older versions of graphix (<= 0.3.3), instruction angles were expressed in radians."""
-            return angle
-
-    try:
-        from graphix.instruction import CONDINSTR
-
-        HAS_CONDINSTR = True
-    except ImportError:
-        HAS_CONDINSTR = False
-
-        def CONDINSTR(instructions: tuple[InstructionType, ...], domain: set[int]) -> InstructionType:  # noqa: N802
-            """In older versions of graphix (<= 0.4), CONDINSTR instructions were not supported."""
-            msg = "CONDINSTR instructions are not supported by graphix <= 0.4"
-            raise NotImplementedError(msg)
 
 
 class OpenQASMParser:
@@ -305,6 +253,25 @@ class _DeclKind(Enum):
 @dataclass
 class _Bit(_Value):
     index: int | None = None
+    """The index of the measurement.
+
+    In Graphix circuits, measurement outcomes are indexed by the rank
+    of the measurement (the index of the outcome of the first
+    measurement is 0, the index of the outcome of the second
+    measurement is 1, etc.). Each time a measurement outcome is stored
+    in a bit register in the QASM file, the index of the outcome is
+    stored in this field, so that when the bit register is referenced
+    subsequently, we can retrieve the index of the corresponding
+    measurement.
+
+    ``None`` means that no measurement outcome has been assigned to
+    the bit register yet.
+
+    Note that bit registers cannot be referenced yet, since we do not
+    support conditional instructions yet. Support for conditional
+    instructions will be introduced in
+    https://github.com/TeamGraphix/graphix-qasm-parser/pull/17.
+    """
 
     def as_measured(self) -> int:
         if self.index is None:
@@ -393,43 +360,43 @@ class _CircuitVisitor(qasm3ParserVisitor):
         instruction: InstructionType
         if gate == "ccx":
             # https://openqasm.com/language/standard_library.html#ccx
-            instruction = CCX(target=operands[2], controls=(operands[0], operands[1]))
+            instruction = Instruction.CCX(target=operands[2], controls=(operands[0], operands[1]))
         elif gate == "cx":
             # https://openqasm.com/language/standard_library.html#cx
-            instruction = CNOT(target=operands[1], control=operands[0])
+            instruction = Instruction.CNOT(target=operands[1], control=operands[0])
         elif gate == "swap":
             # https://openqasm.com/language/standard_library.html#swap
-            instruction = SWAP(targets=(operands[0], operands[1]))
+            instruction = Instruction.SWAP(targets=(operands[0], operands[1]))
         elif gate == "cz":
             # https://openqasm.com/language/standard_library.html#cz
-            instruction = CZ(targets=(operands[0], operands[1]))
+            instruction = Instruction.CZ(targets=(operands[0], operands[1]))
         elif gate == "h":
             # https://openqasm.com/language/standard_library.html#h
-            instruction = H(target=operands[0])
+            instruction = Instruction.H(target=operands[0])
         elif gate == "s":
             # https://openqasm.com/language/standard_library.html#s
-            instruction = S(target=operands[0])
+            instruction = Instruction.S(target=operands[0])
         elif gate == "x":
             # https://openqasm.com/language/standard_library.html#x
-            instruction = X(target=operands[0])
+            instruction = Instruction.X(target=operands[0])
         elif gate == "y":
             # https://openqasm.com/language/standard_library.html#y
-            instruction = Y(target=operands[0])
+            instruction = Instruction.Y(target=operands[0])
         elif gate == "z":
             # https://openqasm.com/language/standard_library.html#z
-            instruction = Z(target=operands[0])
+            instruction = Instruction.Z(target=operands[0])
         elif gate == "id":
             # https://openqasm.com/language/standard_library.html#id
-            instruction = I(target=operands[0])
+            instruction = Instruction.I(target=operands[0])
         elif gate == "rx":
             # https://openqasm.com/language/standard_library.html#rx
-            instruction = RX(target=operands[0], angle=rad_to_angle(exprs[0]))
+            instruction = Instruction.RX(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "ry":
             # https://openqasm.com/language/standard_library.html#ry
-            instruction = RY(target=operands[0], angle=rad_to_angle(exprs[0]))
+            instruction = Instruction.RY(target=operands[0], angle=rad_to_angle(exprs[0]))
         elif gate == "rz":
             # https://openqasm.com/language/standard_library.html#rz
-            instruction = RZ(target=operands[0], angle=rad_to_angle(exprs[0]))
+            instruction = Instruction.RZ(target=operands[0], angle=rad_to_angle(exprs[0]))
         else:
             msg = f"Unknown gate: {gate}"
             raise NotImplementedError(msg)
@@ -462,7 +429,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.instructions = []
         statement_or_scope.accept(self)
         body = tuple(self.instructions)
-        instruction = CONDINSTR(body, domain)
+        instruction = Instruction.CONDINSTR(body, domain)
         self.instructions = parent_instructions
         self.instructions.append(instruction)
 
@@ -491,7 +458,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
             msg = f"Only assignment to bit is supported: {target_bit} unexpected."
             raise NotImplementedError(msg)
         qubit_index = target_qubit.as_qubit().index
-        instruction = M(qubit_index, Axis.Z)
+        instruction = Instruction.M(qubit_index, Axis.Z)
         self.instructions.append(instruction)
         target_bit.index = qubit_index
         self.measurement_count += 1
