@@ -23,8 +23,10 @@ from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 from typing_extensions import override
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from pathlib import Path
 
+    from antlr4.token import Token
     from graphix.fundamentals import ParameterizedAngle
     from graphix.instruction import InstructionType
     from graphix.parameters import Expression, Parameter
@@ -540,8 +542,8 @@ class _CircuitVisitor(qasm3ParserVisitor):
     def visitGateStatement(self, ctx: qasm3Parser.GateStatementContext) -> None:
         self.check_not_inside_gate_definition(ctx)
         name = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
-        param_identifiers = ctx.identifierList(0).Identifier()
-        qubit_identifiers = ctx.identifierList(1).Identifier()
+        param_identifiers: Collection[Token] = ctx.params.Identifier() if ctx.params else ()
+        qubit_identifiers: Collection[Token] = ctx.qubits.Identifier() if ctx.qubits else ()
         scope = ctx.scope()  # type: ignore[no-untyped-call]
         parent_instructions = self.instructions
         parent_env = self.env
@@ -552,7 +554,9 @@ class _CircuitVisitor(qasm3ParserVisitor):
             self.env[param.name] = _Expression(param_ctx, param)
         for qubit_index, qubit_identifier in enumerate(qubit_identifiers):
             self.env[qubit_identifier.getText()] = _Qubit(qubit_identifier, qubit_index)
+        self.inside_gate_definition = True
         scope.accept(self)
+        self.inside_gate_definition = False
         self.user_defined_gates[name] = _Gate(
             params=params, qubit_count=len(qubit_identifiers), instructions=tuple(self.instructions)
         )

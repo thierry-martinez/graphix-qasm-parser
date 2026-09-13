@@ -224,6 +224,39 @@ cphase(π / 2) q[0], q[1];
     ]
 
 
+def test_gate_without_parameters() -> None:
+    """Test gate without parameters."""
+    s = """
+qubit q;
+gate fancyid a {
+h a;
+h a; }
+fancyid q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 1
+    assert circuit.instruction == [Instruction.H(0), Instruction.H(0)]
+
+
+def test_nested_gate_definitions() -> None:
+    """Test nested gate definitions."""
+    s = """
+gate g1 a
+{
+  gate g2 b
+  {
+  }
+}
+"""
+    parser = OpenQASMParser()
+    with pytest.raises(
+        ValueError,
+        match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition",
+    ):
+        parser.parse_str(s)
+
+
 def test_measurement() -> None:
     """Test measurement."""
     s = """
