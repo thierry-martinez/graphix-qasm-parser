@@ -237,6 +237,25 @@ class _DeclKind(Enum):
 @dataclass
 class _Bit(_Value):
     index: int | None = None
+    """The index of the measurement.
+
+    In Graphix circuits, measurement outcomes are indexed by the rank
+    of the measurement (the index of the outcome of the first
+    measurement is 0, the index of the outcome of the second
+    measurement is 1, etc.). Each time a measurement outcome is stored
+    in a bit register in the QASM file, the index of the outcome is
+    stored in this field, so that when the bit register is referenced
+    subsequently, we can retrieve the index of the corresponding
+    measurement.
+
+    ``None`` means that no measurement outcome has been assigned to
+    the bit register yet.
+
+    Note that bit registers cannot be referenced yet, since we do not
+    support conditional instructions yet. Support for conditional
+    instructions will be introduced in
+    https://github.com/TeamGraphix/graphix-qasm-parser/pull/17.
+    """
 
 
 @dataclass
