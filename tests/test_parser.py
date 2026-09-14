@@ -336,7 +336,7 @@ if (b[0] ^ b[1] ^ b[0]) {
  }
 """
     parser = OpenQASMParser()
-    with pytest.warns(UserWarning, match=r"Redundent bits are removed from domains."):
+    with pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."):
         circuit = parser.parse_str(s)
     assert circuit.width == 3
     assert circuit.instruction == [
