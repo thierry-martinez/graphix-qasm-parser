@@ -323,7 +323,7 @@ if (b[0] ^ b[1]) {
     ]
 
 
-def test_redundent_if_statements() -> None:
+def test_redundant_if_statements() -> None:
     """Test redundant if statements."""
     s = """
 include "stdgates.inc";
