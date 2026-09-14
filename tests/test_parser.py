@@ -324,7 +324,7 @@ if (b[0] ^ b[1]) {
 
 
 def test_redundent_if_statements() -> None:
-    """Test redundent if statements."""
+    """Test redundant if statements."""
     s = """
 include "stdgates.inc";
 qubit[3] q;
