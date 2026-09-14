@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - #3, #16: Support for measurements
 
+- #18: Support for user gate definitions
+
 ## [0.1.1] - 2026-02-05
 
 - #7: Parsing of `CZ` gate
