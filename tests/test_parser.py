@@ -245,12 +245,6 @@ if (b[0] ^ b[1]) {
     x q[1];
     z q[1];
  }
-if (b[0] ^ b[1] ^ b[0]) {
-    x q[1];
- }
-if (b[1] ^ b[1]) {
-    z q[1];
- }
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)
@@ -266,6 +260,53 @@ if (b[1] ^ b[1]) {
             ),
             {0, 2},
         ),
+    ]
+
+
+def test_redundent_if_statements() -> None:
+    """Test redundent if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+b[1] = measure q[0];
+if (b[0] ^ b[1] ^ b[0]) {
+    x q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    with pytest.warns(UserWarning, match=r"Redundent bits are removed from domains."):
+        circuit = parser.parse_str(s)
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.M(0, Axis.Z),
         Instruction.CONDINSTR((Instruction.X(1),), {0}),
+    ]
+
+
+def test_void_if_statements() -> None:
+    """Test if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+b[1] = measure q[0];
+if (b[1] ^ b[1]) {
+    z q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    with (
+        pytest.warns(UserWarning, match=r"Conditional instruction with empty condition dropped."),
+        pytest.warns(UserWarning, match=r"Redundent bits are removed from domains."),
+    ):
+        circuit = parser.parse_str(s)
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.M(0, Axis.Z),
         Instruction.Z(1),
     ]

@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Generic, TypeVar
+from warnings import warn
 
 from antlr4 import (  # type: ignore[attr-defined]
     CommonTokenStream,
@@ -34,25 +35,78 @@ _T = TypeVar("_T")
 class OpenQASMParser:
     """Graphix OpenQASM parser."""
 
-    def parse_stream(self, stream: InputStream) -> Circuit:
-        """Parse the OpenQASM circuit described in the given stream."""
+    def parse_stream(self, stream: InputStream, *, stacklevel: int = 1) -> Circuit:
+        """
+        Parse the OpenQASM circuit described in the given stream.
+
+        Parameters
+        ----------
+        stream : InputStream
+            The input stream to parse.
+
+        stacklevel : int, optional
+            Stack level to use for warnings. Defaults to 1, meaning that warnings
+            are reported at this function's call site.
+
+        Returns
+        -------
+        Circuit
+            The parsed circuit.
+
+        """
         lexer = qasm3Lexer(stream)
         tokens = CommonTokenStream(lexer)
         parser = qasm3Parser(tokens)
         tree = parser.program()  # type: ignore[no-untyped-call]
         visitor = _CircuitVisitor(self)
         tree.accept(visitor)
+        for msg in visitor.warnings:
+            warn(msg, stacklevel=stacklevel + 1)
         return Circuit(visitor.width, instr=visitor.instructions)
 
-    def parse_str(self, s: str) -> Circuit:
-        """Parse the OpenQASM circuit described in the given string."""
-        stream = InputStream(s)
-        return self.parse_stream(stream)
+    def parse_str(self, s: str, *, stacklevel: int = 1) -> Circuit:
+        """
+        Parse the OpenQASM circuit described in the given string.
 
-    def parse_file(self, path: Path | str) -> Circuit:
-        """Parse the OpenQASM circuit described in the given file."""
+        Parameters
+        ----------
+        s : str
+            The input string to parse.
+
+        stacklevel : int, optional
+            Stack level to use for warnings. Defaults to 1, meaning that warnings
+            are reported at this function's call site.
+
+        Returns
+        -------
+        Circuit
+            The parsed circuit.
+
+        """
+        stream = InputStream(s)
+        return self.parse_stream(stream, stacklevel=stacklevel + 1)
+
+    def parse_file(self, path: Path | str, *, stacklevel: int = 1) -> Circuit:
+        """
+        Parse the OpenQASM circuit described in the given file.
+
+        Parameters
+        ----------
+        path : Path | str
+            The path of the input file to parse.
+
+        stacklevel : int, optional
+            Stack level to use for warnings. Defaults to 1, meaning that warnings
+            are reported at this function's call site.
+
+        Returns
+        -------
+        Circuit
+            The parsed circuit.
+
+        """
         stream = FileStream(str(path))
-        return self.parse_stream(stream)
+        return self.parse_stream(stream, stacklevel=stacklevel + 1)
 
 
 @dataclass
@@ -291,6 +345,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
     measurement_count: int
     instructions: list[InstructionType]
     env: dict[str, _Value]
+    warnings: list[str]
 
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
@@ -301,6 +356,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
             "pi": _Float("pi", math.pi),
             "π": _Float("π", math.pi),
         }
+        self.warnings = []
 
     @override
     def visitOldStyleDeclarationStatement(self, ctx: qasm3Parser.OldStyleDeclarationStatementContext) -> None:
@@ -429,6 +485,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
             instruction = Instruction.CONDINSTR(tuple(body), domain)
             self.instructions.append(instruction)
         else:
+            self.warnings.append("Conditional instruction with empty condition dropped.")
             self.instructions.extend(body)
 
     def add_measurement_statement(
@@ -721,6 +778,8 @@ class _DomainVisitor(_ExpressionVisitor[set[int]]):
         rhs = self.parse(rhs_expr)
         operator = ctx.getChild(1).symbol.type
         if operator == qasm3Parser.CARET:
+            if lhs & rhs:
+                self.circuit.warnings.append("Redundent bits are removed from domains.")
             result = lhs ^ rhs
         else:
             msg = f"Unknown operator: {ctx.getChild(1).symbol.text}"
