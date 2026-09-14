@@ -16,17 +16,22 @@ from antlr4 import (  # type: ignore[attr-defined]
     InputStream,
     ParserRuleContext,
 )
-from graphix import Circuit, Instruction
-from graphix.fundamentals import Axis, rad_to_angle
+from graphix import Axis, Circuit, Instruction, rad_to_angle
+from graphix.instruction import InstructionVisitor
+from graphix.parameter import Placeholder, with_parameters
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 
 # override introduced in Python 3.12
 from typing_extensions import override
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from pathlib import Path
 
+    from antlr4.token import Token
+    from graphix.fundamentals import ParameterizedAngle
     from graphix.instruction import InstructionType
+    from graphix.parameters import Expression, Parameter
 
 
 _T = TypeVar("_T")
@@ -154,6 +159,10 @@ class _Value:
         msg = f"Not a floating-point value: {self.report_ctx()}"
         raise TypeError(msg)
 
+    def parameterized_angle(self) -> ParameterizedAngle:
+        msg = f"Not an angle: {self.report_ctx()}"
+        raise TypeError(msg)
+
     def as_qubit(self) -> _Qubit:
         if not isinstance(self, _Qubit):
             msg = f"Qubit expected: {self.report_ctx()}"
@@ -224,6 +233,10 @@ class _Int(_Value):
     @override
     def __float__(self) -> float:
         return float(self.value)
+
+    @override
+    def parameterized_angle(self) -> ParameterizedAngle:
+        return self.value
 
 
 @dataclass
@@ -298,6 +311,10 @@ class _Float(_Value):
     def __float__(self) -> float:
         return self.value
 
+    @override
+    def parameterized_angle(self) -> ParameterizedAngle:
+        return self.value
+
 
 class _DeclKind(Enum):
     Bit = enum.auto()
@@ -335,8 +352,161 @@ class _Qubit(_Value):
 
 
 @dataclass
+class _Expression(_Value):
+    value: Expression | float
+
+    @override
+    def __neg__(self) -> _Value:
+        return _Expression(self.ctx, -self.value)
+
+    @override
+    def __add__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float, _Expression)):
+            return _Expression(self.ctx, self.value + other.value)
+        return NotImplemented
+
+    @override
+    def __radd__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Expression(self.ctx, other.value + self.value)
+        return NotImplemented
+
+    @override
+    def __sub__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float, _Expression)):
+            return _Expression(self.ctx, self.value - other.value)
+        return NotImplemented
+
+    @override
+    def __rsub__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Expression(self.ctx, other.value - self.value)
+        return NotImplemented
+
+    @override
+    def __mul__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Expression(self.ctx, self.value * other.value)
+        return NotImplemented
+
+    @override
+    def __rmul__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Expression(self.ctx, other.value * self.value)
+        return NotImplemented
+
+    @override
+    def __truediv__(self, other: object) -> _Value:
+        if isinstance(other, (_Int, _Float)):
+            return _Expression(self.ctx, self.value / other.value)
+        return NotImplemented
+
+    @override
+    def parameterized_angle(self) -> ParameterizedAngle:
+        return self.value
+
+
+@dataclass
 class _Array(_Value):
     values: list[_Value]
+
+
+@dataclass(frozen=True)
+class _Gate:
+    qubit_count: int
+    instructions: tuple[InstructionType, ...]
+    params: tuple[Parameter, ...] = ()
+
+
+_Theta = Placeholder("Theta")
+
+
+_BuiltinGates: dict[str, _Gate] = {
+    "ccx":  # https://openqasm.com/language/standard_library.html#ccx
+    _Gate(
+        qubit_count=3,
+        instructions=(Instruction.CCX(controls=(0, 1), target=2),),
+    ),
+    "cx":  # https://openqasm.com/language/standard_library.html#cx
+    _Gate(
+        qubit_count=2,
+        instructions=(Instruction.CNOT(control=0, target=1),),
+    ),
+    "swap":  # https://openqasm.com/language/standard_library.html#swap
+    _Gate(
+        qubit_count=2,
+        instructions=(Instruction.SWAP(targets=(0, 1)),),
+    ),
+    "cz":  # https://openqasm.com/language/standard_library.html#cz
+    _Gate(
+        qubit_count=2,
+        instructions=(Instruction.CZ(targets=(0, 1)),),
+    ),
+    "h":  # https://openqasm.com/language/standard_library.html#h
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.H(target=0),),
+    ),
+    "s":  # https://openqasm.com/language/standard_library.html#s
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.S(target=0),),
+    ),
+    "x":  # https://openqasm.com/language/standard_library.html#x
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.X(target=0),),
+    ),
+    "y":  # https://openqasm.com/language/standard_library.html#y
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.Y(target=0),),
+    ),
+    "z":  # https://openqasm.com/language/standard_library.html#z
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.Z(target=0),),
+    ),
+    "id":  # https://openqasm.com/language/standard_library.html#id
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.I(target=0),),
+    ),
+    "rx":  # https://openqasm.com/language/standard_library.html#rx
+    _Gate(
+        params=(_Theta,),
+        qubit_count=1,
+        instructions=(Instruction.RX(target=0, angle=rad_to_angle(_Theta)),),
+    ),
+    "ry":  # https://openqasm.com/language/standard_library.html#ry
+    _Gate(
+        params=(_Theta,),
+        qubit_count=1,
+        instructions=(Instruction.RY(target=0, angle=rad_to_angle(_Theta)),),
+    ),
+    "rz":  # https://openqasm.com/language/standard_library.html#rz
+    _Gate(
+        params=(_Theta,),
+        qubit_count=1,
+        instructions=(Instruction.RZ(target=0, angle=rad_to_angle(_Theta)),),
+    ),
+}
+
+
+@dataclass
+class _SubstGate(InstructionVisitor):
+    subst_params: dict[Parameter, ParameterizedAngle]
+    subst_qubits: dict[int, int]
+
+    @override
+    def visit_angle(self, angle: ParameterizedAngle) -> ParameterizedAngle:
+        if isinstance(angle, float):
+            return angle
+        return with_parameters(angle, self.subst_params)
+
+    @override
+    def visit_qubit(self, qubit: int) -> int:
+        return self.subst_qubits[qubit]
 
 
 class _CircuitVisitor(qasm3ParserVisitor):
@@ -346,6 +516,8 @@ class _CircuitVisitor(qasm3ParserVisitor):
     instructions: list[InstructionType]
     env: dict[str, _Value]
     warnings: list[str]
+    user_defined_gates: dict[str, _Gate]
+    inside_gate_definition: bool
 
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
@@ -357,9 +529,17 @@ class _CircuitVisitor(qasm3ParserVisitor):
             "π": _Float("π", math.pi),
         }
         self.warnings = []
+        self.user_defined_gates = {}
+        self.inside_gate_definition = False
+
+    def check_not_inside_gate_definition(self, ctx: ParserRuleContext) -> None:  # type: ignore[valid-type]
+        if self.inside_gate_definition:
+            msg = f"Only built-in gate statements and calls to previously defined gates can appear in body of gate definition: {ctx}"
+            raise ValueError(msg)
 
     @override
     def visitOldStyleDeclarationStatement(self, ctx: qasm3Parser.OldStyleDeclarationStatementContext) -> None:
+        self.check_not_inside_gate_definition(ctx)
         kind = ctx.getChild(0)
         if kind.symbol.type == qasm3Parser.QREG:
             decl_kind = _DeclKind.Qubit
@@ -374,6 +554,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     @override
     def visitQuantumDeclarationStatement(self, ctx: qasm3Parser.QuantumDeclarationStatementContext) -> None:
+        self.check_not_inside_gate_definition(ctx)
         designator = ctx.qubitType().designator()  # type: ignore[no-untyped-call]
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         self.declare_registers(ctx, _DeclKind.Qubit, identifier, designator)
@@ -390,68 +571,70 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     @override
     def visitConstDeclarationStatement(self, ctx: qasm3Parser.ConstDeclarationStatementContext) -> None:
+        self.check_not_inside_gate_definition(ctx)
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         value = ctx.declarationExpression()  # type: ignore[no-untyped-call]
         expr = self.evaluate_expression(value)
         self.env[identifier] = expr
 
     @override
-    def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:  # noqa: C901, PLR0912
-        gate = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
+    def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:
+        gate_name = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         operand_list = ctx.gateOperandList()  # type: ignore[no-untyped-call]
         operands = [
             self.convert_qubit_index(operand_list.getChild(i)) for i in range(0, operand_list.getChildCount(), 2)
         ]
         if expr_list := ctx.expressionList():  # type: ignore[no-untyped-call]
             exprs = [
-                float(self.evaluate_expression(expr_list.getChild(i))) for i in range(0, expr_list.getChildCount(), 2)
+                self.evaluate_expression(expr_list.getChild(i)).parameterized_angle()
+                for i in range(0, expr_list.getChildCount(), 2)
             ]
         else:
             exprs = []
-        instruction: InstructionType
-        if gate == "ccx":
-            # https://openqasm.com/language/standard_library.html#ccx
-            instruction = Instruction.CCX(target=operands[2], controls=(operands[0], operands[1]))
-        elif gate == "cx":
-            # https://openqasm.com/language/standard_library.html#cx
-            instruction = Instruction.CNOT(target=operands[1], control=operands[0])
-        elif gate == "swap":
-            # https://openqasm.com/language/standard_library.html#swap
-            instruction = Instruction.SWAP(targets=(operands[0], operands[1]))
-        elif gate == "cz":
-            # https://openqasm.com/language/standard_library.html#cz
-            instruction = Instruction.CZ(targets=(operands[0], operands[1]))
-        elif gate == "h":
-            # https://openqasm.com/language/standard_library.html#h
-            instruction = Instruction.H(target=operands[0])
-        elif gate == "s":
-            # https://openqasm.com/language/standard_library.html#s
-            instruction = Instruction.S(target=operands[0])
-        elif gate == "x":
-            # https://openqasm.com/language/standard_library.html#x
-            instruction = Instruction.X(target=operands[0])
-        elif gate == "y":
-            # https://openqasm.com/language/standard_library.html#y
-            instruction = Instruction.Y(target=operands[0])
-        elif gate == "z":
-            # https://openqasm.com/language/standard_library.html#z
-            instruction = Instruction.Z(target=operands[0])
-        elif gate == "id":
-            # https://openqasm.com/language/standard_library.html#id
-            instruction = Instruction.I(target=operands[0])
-        elif gate == "rx":
-            # https://openqasm.com/language/standard_library.html#rx
-            instruction = Instruction.RX(target=operands[0], angle=rad_to_angle(exprs[0]))
-        elif gate == "ry":
-            # https://openqasm.com/language/standard_library.html#ry
-            instruction = Instruction.RY(target=operands[0], angle=rad_to_angle(exprs[0]))
-        elif gate == "rz":
-            # https://openqasm.com/language/standard_library.html#rz
-            instruction = Instruction.RZ(target=operands[0], angle=rad_to_angle(exprs[0]))
-        else:
-            msg = f"Unknown gate: {gate}"
-            raise NotImplementedError(msg)
-        self.instructions.append(instruction)
+        gate = _BuiltinGates.get(gate_name)
+        if gate is None:
+            gate = self.user_defined_gates.get(gate_name)
+            if gate is None:
+                msg = f"Unknown gate {gate_name}: {ctx}"
+                raise ValueError(msg)
+        if len(exprs) != len(gate.params):
+            param_names = ", ".join(map(str, gate.params))
+            msg = f"Gate {gate_name} expect {len(gate.params)} parameters ({param_names}) but {len(exprs)} given: {ctx}"
+            raise ValueError(msg)
+        if len(operands) != gate.qubit_count:
+            msg = f"Gate {gate_name} expect {gate.qubit_count} qubits but {len(operands)} given: {ctx}"
+            raise ValueError(msg)
+        subst_params = dict(zip(gate.params, exprs, strict=True))
+        subst_qubits = dict(enumerate(operands))
+        subst_gate = _SubstGate(subst_params, subst_qubits)
+        for instruction in gate.instructions:
+            local_instruction = instruction.visit(subst_gate, copy=True)
+            self.instructions.append(local_instruction)
+
+    @override
+    def visitGateStatement(self, ctx: qasm3Parser.GateStatementContext) -> None:
+        self.check_not_inside_gate_definition(ctx)
+        name = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
+        param_identifiers: Collection[Token] = ctx.params.Identifier() if ctx.params else ()
+        qubit_identifiers: Collection[Token] = ctx.qubits.Identifier() if ctx.qubits else ()
+        scope = ctx.scope()  # type: ignore[no-untyped-call]
+        parent_instructions = self.instructions
+        parent_env = self.env
+        self.instructions = []
+        params = tuple(Placeholder(param.getText()) for param in param_identifiers)
+        self.env = {}
+        for param_ctx, param in zip(param_identifiers, params, strict=True):
+            self.env[param.name] = _Expression(param_ctx, param)
+        for qubit_index, qubit_identifier in enumerate(qubit_identifiers):
+            self.env[qubit_identifier.getText()] = _Qubit(qubit_identifier, qubit_index)
+        self.inside_gate_definition = True
+        scope.accept(self)
+        self.inside_gate_definition = False
+        self.user_defined_gates[name] = _Gate(
+            params=params, qubit_count=len(qubit_identifiers), instructions=tuple(self.instructions)
+        )
+        self.instructions = parent_instructions
+        self.env = parent_env
 
     @override
     def visitAssignmentStatement(self, ctx: qasm3Parser.AssignmentStatementContext) -> None:
