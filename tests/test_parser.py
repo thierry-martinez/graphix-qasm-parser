@@ -197,6 +197,66 @@ rz(alpha) q[0];
         next(iterator)
 
 
+def test_gate_definition() -> None:
+    """Test gate definition."""
+    # Excerpt of https://openqasm.com/language/gates.html#defining-gates
+    s = """
+qubit[2] q;
+gate cphase(θ) a, b
+{
+  rz(θ / 2) a;
+  cx a, b;
+  rz(-θ / 2) b;
+  cx a, b;
+  rz(θ / 2) b;
+}
+cphase(π / 2) q[0], q[1];
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 2
+    assert circuit.instruction == [
+        Instruction.RZ(0, ANGLE_PI / 4),
+        Instruction.CNOT(control=0, target=1),
+        Instruction.RZ(1, -ANGLE_PI / 4),
+        Instruction.CNOT(control=0, target=1),
+        Instruction.RZ(1, ANGLE_PI / 4),
+    ]
+
+
+def test_gate_without_parameters() -> None:
+    """Test gate without parameters."""
+    s = """
+qubit q;
+gate fancyid a {
+h a;
+h a; }
+fancyid q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 1
+    assert circuit.instruction == [Instruction.H(0), Instruction.H(0)]
+
+
+def test_nested_gate_definitions() -> None:
+    """Test nested gate definitions."""
+    s = """
+gate g1 a
+{
+  gate g2 b
+  {
+  }
+}
+"""
+    parser = OpenQASMParser()
+    with pytest.raises(
+        ValueError,
+        match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition",
+    ):
+        parser.parse_str(s)
+
+
 def test_measurement() -> None:
     """Test measurement."""
     s = """
