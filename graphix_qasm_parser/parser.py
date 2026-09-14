@@ -266,11 +266,6 @@ class _Bit(_Value):
 
     ``None`` means that no measurement outcome has been assigned to
     the bit register yet.
-
-    Note that bit registers cannot be referenced yet, since we do not
-    support conditional instructions yet. Support for conditional
-    instructions will be introduced in
-    https://github.com/TeamGraphix/graphix-qasm-parser/pull/17.
     """
 
     def as_measured(self) -> int:
