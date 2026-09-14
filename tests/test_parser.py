@@ -51,16 +51,31 @@ include "qelib1.inc";
 qubit[3] q;
 ccx q[0], q[1], q[2];
 cx q[0], q[1];
-swap q[0], q[1];
+cy q[0], q[1];
 cz q[0], q[1];
+swap q[0], q[1];
+cswap q[0], q[1], q[2];
 h q[0];
 s q[0];
+sdg q[0];
+t q[0];
+tdg q[0];
+sx q[0];
+sxdg q[0];
 x q[0];
 y q[0];
 z q[0];
+p(pi/4) q[0];
 rx(pi/4) q[0];
 ry(pi/4) q[0];
 rz(pi/4) q[0];
+U(pi/4, pi/5, pi/6) q[0];
+cp(pi/4) q[0], q[1];
+crx(pi/4) q[0], q[1];
+cry(pi/4) q[0], q[1];
+crz(pi/4) q[0], q[1];
+cu(pi/4, pi/5, pi/6, pi/7) q[0], q[1];
+gphase(pi/3);
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)
@@ -75,16 +90,39 @@ rz(pi/4) q[0];
     assert instruction.target == 1
     assert instruction.control == 0
     instruction = next(iterator)
-    assert isinstance(instruction, Instruction.SWAP)
-    assert instruction.targets == (0, 1)
+    assert isinstance(instruction, Instruction.CY)
+    assert instruction.target == 1
+    assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.CZ)
     assert instruction.targets == (0, 1)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.SWAP)
+    assert instruction.targets == (0, 1)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CSWAP)
+    assert instruction.control == 0
+    assert instruction.targets == (1, 2)
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.H)
     assert instruction.target == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.S)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.SDG)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.T)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.TDG)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.SX)
+    assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.SXDG)
     assert instruction.target == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.X)
@@ -95,6 +133,11 @@ rz(pi/4) q[0];
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.Z)
     assert instruction.target == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.P)
+    assert instruction.target == 0
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.RX)
     assert instruction.target == 0
@@ -110,6 +153,54 @@ rz(pi/4) q[0];
     assert instruction.target == 0
     assert isinstance(instruction.angle, float)
     assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.U)
+    assert instruction.target == 0
+    assert isinstance(instruction.theta, float)
+    assert math.isclose(instruction.theta, ANGLE_PI / 4)
+    assert isinstance(instruction.phi, float)
+    assert math.isclose(instruction.phi, ANGLE_PI / 5)
+    assert isinstance(instruction.lambda_, float)
+    assert math.isclose(instruction.lambda_, ANGLE_PI / 6)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CP)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CRX)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CRY)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CRZ)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.angle, float)
+    assert math.isclose(instruction.angle, ANGLE_PI / 4)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CU)
+    assert instruction.control == 0
+    assert instruction.target == 1
+    assert isinstance(instruction.theta, float)
+    assert math.isclose(instruction.theta, ANGLE_PI / 4)
+    assert isinstance(instruction.phi, float)
+    assert math.isclose(instruction.phi, ANGLE_PI / 5)
+    assert isinstance(instruction.lambda_, float)
+    assert math.isclose(instruction.lambda_, ANGLE_PI / 6)
+    assert isinstance(instruction.gamma, float)
+    assert math.isclose(instruction.gamma, ANGLE_PI / 7)
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.GPHASE)
+    assert instruction.angle == ANGLE_PI / 3
     with pytest.raises(StopIteration):
         next(iterator)
 

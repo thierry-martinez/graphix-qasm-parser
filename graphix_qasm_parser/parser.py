@@ -16,7 +16,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     InputStream,
     ParserRuleContext,
 )
-from graphix import Axis, Circuit, Instruction, rad_to_angle
+from graphix import ANGLE_PI, Axis, Circuit, Instruction, rad_to_angle
 from graphix.instruction import InstructionVisitor
 from graphix.parameter import Placeholder, with_parameters
 from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
@@ -420,6 +420,24 @@ class _Gate:
 
 _Theta = Placeholder("Theta")
 
+_Phi = Placeholder("Phi")
+
+_Gamma = Placeholder("Gamma")
+
+_Lambda = Placeholder("Lambda")
+
+
+def _u3(
+    target: int, theta: ParameterizedAngle, phi: ParameterizedAngle, lambda_: ParameterizedAngle
+) -> tuple[InstructionType, ...]:
+    return (
+        Instruction.U(target=target, theta=theta, phi=phi, lambda_=lambda_),
+        # Overcome limitation of placeholders that cannot be summed.
+        Instruction.GPHASE(-theta / 2),
+        Instruction.GPHASE(-phi / 2),
+        Instruction.GPHASE(-lambda_ / 2),
+    )
+
 
 _BuiltinGates: dict[str, _Gate] = {
     "ccx":  # https://openqasm.com/language/standard_library.html#ccx
@@ -432,15 +450,25 @@ _BuiltinGates: dict[str, _Gate] = {
         qubit_count=2,
         instructions=(Instruction.CNOT(control=0, target=1),),
     ),
-    "swap":  # https://openqasm.com/language/standard_library.html#swap
+    "cy":  # https://openqasm.com/language/standard_library.html#cy
     _Gate(
         qubit_count=2,
-        instructions=(Instruction.SWAP(targets=(0, 1)),),
+        instructions=(Instruction.CY(control=0, target=1),),
     ),
     "cz":  # https://openqasm.com/language/standard_library.html#cz
     _Gate(
         qubit_count=2,
         instructions=(Instruction.CZ(targets=(0, 1)),),
+    ),
+    "swap":  # https://openqasm.com/language/standard_library.html#swap
+    _Gate(
+        qubit_count=2,
+        instructions=(Instruction.SWAP(targets=(0, 1)),),
+    ),
+    "cswap":  # https://openqasm.com/language/standard_library.html#cswap
+    _Gate(
+        qubit_count=3,
+        instructions=(Instruction.CSWAP(control=0, targets=(1, 2)),),
     ),
     "h":  # https://openqasm.com/language/standard_library.html#h
     _Gate(
@@ -451,6 +479,31 @@ _BuiltinGates: dict[str, _Gate] = {
     _Gate(
         qubit_count=1,
         instructions=(Instruction.S(target=0),),
+    ),
+    "sdg":  # https://openqasm.com/language/standard_library.html#sdg
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.SDG(target=0),),
+    ),
+    "t":  # https://openqasm.com/language/standard_library.html#t
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.T(target=0),),
+    ),
+    "tdg":  # https://openqasm.com/language/standard_library.html#tdg
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.TDG(target=0),),
+    ),
+    "sx":  # https://openqasm.com/language/standard_library.html#sx
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.SX(target=0),),
+    ),
+    "sxdg":  # https://openqasm.com/language/standard_library.html#sxdg
+    _Gate(
+        qubit_count=1,
+        instructions=(Instruction.SXDG(target=0),),
     ),
     "x":  # https://openqasm.com/language/standard_library.html#x
     _Gate(
@@ -472,6 +525,18 @@ _BuiltinGates: dict[str, _Gate] = {
         qubit_count=1,
         instructions=(Instruction.I(target=0),),
     ),
+    "p":  # https://openqasm.com/language/standard_library.html#p
+    _Gate(
+        params=(_Theta,),
+        qubit_count=1,
+        instructions=(Instruction.P(target=0, angle=rad_to_angle(_Theta)),),
+    ),
+    "u1":  # https://openqasm.com/language/standard_library.html#u1
+    _Gate(
+        params=(_Theta,),
+        qubit_count=1,
+        instructions=(Instruction.P(target=0, angle=rad_to_angle(_Theta)),),
+    ),
     "rx":  # https://openqasm.com/language/standard_library.html#rx
     _Gate(
         params=(_Theta,),
@@ -489,6 +554,65 @@ _BuiltinGates: dict[str, _Gate] = {
         params=(_Theta,),
         qubit_count=1,
         instructions=(Instruction.RZ(target=0, angle=rad_to_angle(_Theta)),),
+    ),
+    "U":  # https://openqasm.com/language/gates.html#U
+    _Gate(
+        params=(_Theta, _Phi, _Lambda),
+        qubit_count=1,
+        instructions=(
+            Instruction.U(target=0, theta=rad_to_angle(_Theta), phi=rad_to_angle(_Phi), lambda_=rad_to_angle(_Lambda)),
+        ),
+    ),
+    "cp":  # https://openqasm.com/language/standard_library.html#cp
+    _Gate(
+        params=(_Theta,),
+        qubit_count=2,
+        instructions=(Instruction.CP(control=0, target=1, angle=rad_to_angle(_Theta)),),
+    ),
+    "crx":  # https://openqasm.com/language/standard_library.html#crx
+    _Gate(
+        params=(_Theta,),
+        qubit_count=2,
+        instructions=(Instruction.CRX(control=0, target=1, angle=rad_to_angle(_Theta)),),
+    ),
+    "cry":  # https://openqasm.com/language/standard_library.html#cry
+    _Gate(
+        params=(_Theta,),
+        qubit_count=2,
+        instructions=(Instruction.CRY(control=0, target=1, angle=rad_to_angle(_Theta)),),
+    ),
+    "crz":  # https://openqasm.com/language/standard_library.html#crz
+    _Gate(
+        params=(_Theta,),
+        qubit_count=2,
+        instructions=(Instruction.CRZ(control=0, target=1, angle=rad_to_angle(_Theta)),),
+    ),
+    "cu":  # https://openqasm.com/language/standard_library.html#cu
+    _Gate(
+        params=(_Theta, _Phi, _Lambda, _Gamma),
+        qubit_count=2,
+        instructions=(
+            Instruction.CU(
+                control=0,
+                target=1,
+                theta=rad_to_angle(_Theta),
+                phi=rad_to_angle(_Phi),
+                lambda_=rad_to_angle(_Lambda),
+                gamma=rad_to_angle(_Gamma),
+            ),
+        ),
+    ),
+    "u2":  # https://openqasm.com/language/standard_library.html#u2
+    _Gate(
+        params=(_Phi, _Lambda),
+        qubit_count=1,
+        instructions=_u3(target=0, theta=ANGLE_PI / 2, phi=rad_to_angle(_Phi), lambda_=rad_to_angle(_Lambda)),
+    ),
+    "u3":  # https://openqasm.com/language/standard_library.html#u3
+    _Gate(
+        params=(_Theta, _Phi, _Lambda),
+        qubit_count=1,
+        instructions=_u3(target=0, theta=rad_to_angle(_Theta), phi=rad_to_angle(_Phi), lambda_=rad_to_angle(_Lambda)),
     ),
 }
 
@@ -579,11 +703,6 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     @override
     def visitGateCallStatement(self, ctx: qasm3Parser.GateCallStatementContext) -> None:
-        gate_name = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
-        operand_list = ctx.gateOperandList()  # type: ignore[no-untyped-call]
-        operands = [
-            self.convert_qubit_index(operand_list.getChild(i)) for i in range(0, operand_list.getChildCount(), 2)
-        ]
         if expr_list := ctx.expressionList():  # type: ignore[no-untyped-call]
             exprs = [
                 self.evaluate_expression(expr_list.getChild(i)).parameterized_angle()
@@ -591,6 +710,20 @@ class _CircuitVisitor(qasm3ParserVisitor):
             ]
         else:
             exprs = []
+        if ctx.GPHASE():  # type: ignore[no-untyped-call]
+            # https://openqasm.com/language/gates.html#gphase
+
+            # `gphase` is parsed as a keyword rather than as an
+            # identifier name (`ctx.Identifier()` returns `None` in
+            # this case), so it should be handled specially.
+            instruction: InstructionType = Instruction.GPHASE(angle=rad_to_angle(exprs[0]))
+            self.instructions.append(instruction)
+            return
+        gate_name = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
+        operand_list = ctx.gateOperandList()  # type: ignore[no-untyped-call]
+        operands = [
+            self.convert_qubit_index(operand_list.getChild(i)) for i in range(0, operand_list.getChildCount(), 2)
+        ]
         gate = _BuiltinGates.get(gate_name)
         if gate is None:
             gate = self.user_defined_gates.get(gate_name)
