@@ -962,7 +962,7 @@ class _DomainVisitor(_ExpressionVisitor[set[int]]):
         operator = ctx.getChild(1).symbol.type
         if operator == qasm3Parser.CARET:
             if lhs & rhs:
-                self.circuit.warnings.append("Redundent bits are removed from domains.")
+                self.circuit.warnings.append("Redundant bits are removed from domains.")
             result = lhs ^ rhs
         else:
             msg = f"Unknown operator: {ctx.getChild(1).symbol.text}"
