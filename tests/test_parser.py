@@ -361,7 +361,7 @@ if (b[1] ^ b[1]) {
     parser = OpenQASMParser()
     with (
         pytest.warns(UserWarning, match=r"Conditional instruction with empty condition dropped."),
-        pytest.warns(UserWarning, match=r"Redundent bits are removed from domains."),
+        pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."),
     ):
         circuit = parser.parse_str(s)
     assert circuit.width == 3
