@@ -245,6 +245,12 @@ if (b[0] ^ b[1]) {
     x q[1];
     z q[1];
  }
+if (b[0] ^ b[1] ^ b[0]) {
+    x q[1];
+ }
+if (b[1] ^ b[1]) {
+    z q[1];
+ }
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)
@@ -260,4 +266,6 @@ if (b[0] ^ b[1]) {
             ),
             {0, 2},
         ),
+        Instruction.CONDINSTR((Instruction.X(1),), {0}),
+        Instruction.Z(1),
     ]

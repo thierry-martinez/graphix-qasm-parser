@@ -423,10 +423,13 @@ class _CircuitVisitor(qasm3ParserVisitor):
         parent_instructions = self.instructions
         self.instructions = []
         statement_or_scope.accept(self)
-        body = tuple(self.instructions)
-        instruction = Instruction.CONDINSTR(body, domain)
+        body = self.instructions
         self.instructions = parent_instructions
-        self.instructions.append(instruction)
+        if domain:
+            instruction = Instruction.CONDINSTR(tuple(body), domain)
+            self.instructions.append(instruction)
+        else:
+            self.instructions.extend(body)
 
     def add_measurement_statement(
         self,
@@ -718,7 +721,7 @@ class _DomainVisitor(_ExpressionVisitor[set[int]]):
         rhs = self.parse(rhs_expr)
         operator = ctx.getChild(1).symbol.type
         if operator == qasm3Parser.CARET:
-            result = lhs | rhs
+            result = lhs ^ rhs
         else:
             msg = f"Unknown operator: {ctx.getChild(1).symbol.text}"
             raise NotImplementedError(msg)
