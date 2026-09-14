@@ -11,7 +11,20 @@ maintainers = [
     { name = "Thierry Martinez", email = "Thierry.Martinez@inria.fr" },
 ]
 license-files = ["LICENSE"]
-dynamic = ["version", "dependencies", "optional-dependencies"]
+dynamic = ["version"]
+dependencies = [
+    "graphix>=0.4",
+    "openqasm-parser>=3.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy==1.17.0",
+    "pyright",
+    "ruff==0.12.5",
+    "nox==2025.5.1",
+    "pytest",
+]
 
 [tool.setuptools_scm]
 version_file = "graphix_qasm_parser/_version.py"
@@ -71,3 +84,6 @@ reportUnknownLambdaType = "information"
 #reportUnknownMemberType = "information"
 # reportUnknownParameterType = "information"
 # reportUnknownVariableType = "information"
+
+[tool.uv.sources]
+graphix = { git = "https://github.com/TeamGraphix/graphix.git" }

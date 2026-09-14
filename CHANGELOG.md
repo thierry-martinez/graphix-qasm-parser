@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- #14, #15: Support for all the gates specified by the OpenQASM 3.0 specification
+
 - #12, #13: Remove incorrect parsing of `crz` gates (@clebrin)
 
 - #3, #16: Support for measurements
