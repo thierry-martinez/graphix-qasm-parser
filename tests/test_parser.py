@@ -93,7 +93,8 @@ gphase(pi/3);
     assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.CZ)
-    assert instruction.targets == (0, 1)
+    assert instruction.target == 1
+    assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.SWAP)
     assert instruction.targets == (0, 1)

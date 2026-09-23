@@ -387,7 +387,7 @@ _BuiltinGates: dict[str, _Gate] = {
     "cz":  # https://openqasm.com/language/standard_library.html#cz
     _Gate(
         qubit_count=2,
-        instructions=(Instruction.CZ(targets=(0, 1)),),
+        instructions=(Instruction.CZ(control=0, target=1),),
     ),
     "swap":  # https://openqasm.com/language/standard_library.html#swap
     _Gate(

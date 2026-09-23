@@ -86,4 +86,5 @@ reportUnknownLambdaType = "information"
 # reportUnknownVariableType = "information"
 
 [tool.uv.sources]
-graphix = { git = "https://github.com/TeamGraphix/graphix.git" }
+# TeamGraphix/graphix#608: Ensure consistency for instruction qubits
+graphix = { git = "https://github.com/TeamGraphix/graphix.git", branch = "refs/pull/608/head" }
