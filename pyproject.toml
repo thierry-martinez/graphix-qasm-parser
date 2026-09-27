@@ -87,4 +87,4 @@ reportUnknownLambdaType = "information"
 
 [tool.uv.sources]
 # TeamGraphix/graphix#587: Improving Circuit API
-graphix = { git = "https://github.com/TeamGraphix/graphix.git", branch = "refs/pull/587/head" }
+graphix = { git = "https://github.com/TeamGraphix/graphix.git", rev = "refs/pull/587/head" }
