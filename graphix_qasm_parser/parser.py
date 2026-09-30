@@ -5,6 +5,7 @@ from __future__ import annotations
 import enum
 import math
 from abc import ABC, abstractmethod
+from copy import copy
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Generic, TypeVar
@@ -667,6 +668,12 @@ class _ConditionalBlock:
     instructions: list[InstructionTypeWithoutM]
 
 
+BASE_ENV: dict[str, _Value] = {
+    "pi": _Float("pi", math.pi),
+    "π": _Float("π", math.pi),
+}
+
+
 class _CircuitVisitor(qasm3ParserVisitor):
     parser: OpenQASMParser
     width: int
@@ -682,10 +689,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.width = 0
         self.measurement_count = 0
         self.block = _CircuitBlock([])
-        self.env = {
-            "pi": _Float("pi", math.pi),
-            "π": _Float("π", math.pi),
-        }
+        self.env = copy(BASE_ENV)
         self.warnings = []
         self.user_defined_gates = {}
         self.discard_measurement = True
@@ -788,7 +792,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         sub_block = _GateDefinitionBlock([])
         self.block = sub_block
         params = tuple(Placeholder(param.getText()) for param in param_identifiers)
-        self.env = {}
+        self.env = copy(BASE_ENV)
         for param_ctx, param in zip(param_identifiers, params, strict=True):
             self.env[param.name] = _Expression(param_ctx, param)
         for qubit_index, qubit_identifier in enumerate(qubit_identifiers):
