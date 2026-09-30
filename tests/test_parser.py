@@ -344,7 +344,7 @@ gate g1 a
 """
     parser = OpenQASMParser()
     with pytest.raises(
-        ValueError,
+        TypeError,
         match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition",
     ):
         parser.parse_str(s)
