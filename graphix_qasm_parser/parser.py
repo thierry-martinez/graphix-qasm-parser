@@ -26,7 +26,7 @@ from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 from typing_extensions import override
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Mapping
     from pathlib import Path
 
     from antlr4.token import Token
@@ -38,10 +38,21 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
+@dataclass(frozen=True)
+class ParsedCircuit:
+    """Parsed circuit."""
+
+    circuit: Circuit
+    qubits: Mapping[str, int | tuple[int, ...]]
+    bits: Mapping[str, int | tuple[int | None, ...] | None]
+
+
 class OpenQASMParser:
     """Graphix OpenQASM parser."""
 
-    def parse_stream(self, stream: InputStream, *, discard_measurement: bool = True, stacklevel: int = 1) -> Circuit:
+    def parse_stream(
+        self, stream: InputStream, *, discard_measurement: bool = True, stacklevel: int = 1
+    ) -> ParsedCircuit:
         """
         Parse the OpenQASM circuit described in the given stream.
 
@@ -60,7 +71,7 @@ class OpenQASMParser:
 
         Returns
         -------
-        Circuit
+        ParsedCircuit
             The parsed circuit.
 
         """
@@ -73,9 +84,23 @@ class OpenQASMParser:
         tree.accept(visitor)
         for msg in visitor.warnings:
             warn(msg, stacklevel=stacklevel + 1)
-        return Circuit(visitor.width, instr=visitor.block.instructions)
+        circuit = Circuit(visitor.width, instr=visitor.block.instructions)
+        qubits: dict[str, int | tuple[int, ...]] = {}
+        bits: dict[str, int | tuple[int | None, ...] | None] = {}
+        for identifier in visitor.declared_symbols:
+            value = visitor.env[identifier]
+            if isinstance(value, _Array):
+                if isinstance(value.values[0], _Bit):
+                    bits[identifier] = tuple(value.index for value in value.values if isinstance(value, _Bit))
+                else:
+                    qubits[identifier] = tuple(value.index for value in value.values if isinstance(value, _Qubit))
+            elif isinstance(value, _Bit):
+                bits[identifier] = value.index
+            elif isinstance(value, _Qubit):
+                qubits[identifier] = value.index
+        return ParsedCircuit(circuit, qubits, bits)
 
-    def parse_str(self, s: str, *, discard_measurement: bool = True, stacklevel: int = 1) -> Circuit:
+    def parse_str(self, s: str, *, discard_measurement: bool = True, stacklevel: int = 1) -> ParsedCircuit:
         """
         Parse the OpenQASM circuit described in the given string.
 
@@ -94,14 +119,14 @@ class OpenQASMParser:
 
         Returns
         -------
-        Circuit
+        ParsedCircuit
             The parsed circuit.
 
         """
         stream = InputStream(s)
         return self.parse_stream(stream, discard_measurement=discard_measurement, stacklevel=stacklevel + 1)
 
-    def parse_file(self, path: Path | str, *, discard_measurement: bool = True, stacklevel: int = 1) -> Circuit:
+    def parse_file(self, path: Path | str, *, discard_measurement: bool = True, stacklevel: int = 1) -> ParsedCircuit:
         """
         Parse the OpenQASM circuit described in the given file.
 
@@ -120,7 +145,7 @@ class OpenQASMParser:
 
         Returns
         -------
-        Circuit
+        ParsedCircuit
             The parsed circuit.
 
         """
@@ -362,10 +387,11 @@ class _Bit(_Value):
 
 @dataclass
 class _Qubit(_Value):
-    index: int | None
+    index: int
+    already_measured: bool = False
 
     def as_index(self) -> int:
-        if self.index is None:
+        if self.already_measured:
             msg = f"Qubit already measured: {self.report_ctx()}"
             raise ValueError(msg)
         return self.index
@@ -683,6 +709,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
     warnings: list[str]
     user_defined_gates: dict[str, _Gate]
     discard_measurement: bool
+    declared_symbols: list[str]
 
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
@@ -693,6 +720,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.warnings = []
         self.user_defined_gates = {}
         self.discard_measurement = True
+        self.declared_symbols = []
 
     def expect_circuit_block(self, ctx: ParserRuleContext) -> _CircuitBlock:  # type: ignore[valid-type]
         if not isinstance(self.block, _CircuitBlock):
@@ -872,7 +900,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         target_bit.index = qubit_index
         self.measurement_count += 1
         if self.discard_measurement:
-            target_qubit.index = None
+            target_qubit.already_measured = True
         else:
             target_qubit.index = self.width
             self.width += 1
@@ -903,6 +931,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         else:
             value = self.declare_register(ctx, decl_kind)
         self.env[identifier] = value
+        self.declared_symbols.append(identifier)
 
     def convert_qubit_index(self, operand: qasm3Parser.GateOperandContext) -> int:
         value = self.evaluate_operand(operand)
