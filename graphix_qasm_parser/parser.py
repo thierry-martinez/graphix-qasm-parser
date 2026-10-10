@@ -40,7 +40,22 @@ _T = TypeVar("_T")
 
 @dataclass(frozen=True)
 class ParsedCircuit:
-    """Parsed circuit."""
+    """Parsed circuit.
+
+    Attributes
+    ----------
+    circuit : Circuit
+        The circuit.
+    qubits : Mapping[str, int | tuple[int, ...]]
+        Mapping ordered by the program declaration order, mapping
+        quantum register identifiers to the indices of the
+        corresponding qubits in ``circuit``.
+    bits: Mapping[str, int | tuple[int | None, ...] | None]
+        Mapping ordered by the program declaration order, mapping
+        classical register identifiers to the indices of the last
+        measured qubit assigned to them in ``circuit`` if any, or
+        ``None`` otherwise.
+    """
 
     circuit: Circuit
     qubits: Mapping[str, int | tuple[int, ...]]
@@ -703,7 +718,6 @@ BASE_ENV: dict[str, _Value] = {
 class _CircuitVisitor(qasm3ParserVisitor):
     parser: OpenQASMParser
     width: int
-    measurement_count: int
     block: _CircuitBlock | _GateDefinitionBlock | _ConditionalBlock
     env: dict[str, _Value]
     warnings: list[str]
@@ -714,7 +728,6 @@ class _CircuitVisitor(qasm3ParserVisitor):
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
         self.width = 0
-        self.measurement_count = 0
         self.block = _CircuitBlock([])
         self.env = copy(BASE_ENV)
         self.warnings = []
@@ -898,7 +911,6 @@ class _CircuitVisitor(qasm3ParserVisitor):
         instruction = Instruction.M(qubit_index, Axis.Z)
         block.instructions.append(instruction)
         target_bit.index = qubit_index
-        self.measurement_count += 1
         if self.discard_measurement:
             target_qubit.already_measured = True
         else:
