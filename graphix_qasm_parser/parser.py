@@ -101,7 +101,7 @@ class OpenQASMParser:
         tree.accept(visitor)
         for msg in visitor.warnings:
             warn(msg, stacklevel=stacklevel + 1)
-        circuit = Circuit(visitor.width, instr=visitor.block.instructions)
+        circuit = Circuit(visitor.width, instr=visitor.block.instructions, ancillas=visitor.ancillas)
         qubits: dict[str, int | tuple[int, ...]] = {}
         bits: dict[str, int | tuple[int | None, ...] | None] = {}
         for identifier in visitor.declared_symbols:
@@ -729,6 +729,7 @@ BASE_ENV: dict[str, _Value] = {
 class _CircuitVisitor(qasm3ParserVisitor):
     parser: OpenQASMParser
     width: int
+    ancillas: int
     block: _CircuitBlock | _GateDefinitionBlock | _ConditionalBlock
     env: dict[str, _Value]
     warnings: list[str]
@@ -739,6 +740,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
         self.width = 0
+        self.ancillas = 0
         self.block = _CircuitBlock([])
         self.env = copy(BASE_ENV)
         self.warnings = []
