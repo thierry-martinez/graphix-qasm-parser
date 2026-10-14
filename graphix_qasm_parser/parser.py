@@ -40,7 +40,8 @@ _T = TypeVar("_T")
 
 @dataclass(frozen=True)
 class ParsedCircuit:
-    """Parsed circuit.
+    """
+    Parsed circuit.
 
     Attributes
     ----------
@@ -55,6 +56,7 @@ class ParsedCircuit:
         classical register identifiers to the indices of the last
         measured qubit assigned to them in ``circuit`` if any, or
         ``None`` otherwise.
+
     """
 
     circuit: Circuit
@@ -695,6 +697,15 @@ class _SubstGate(InstructionVisitor):
 
 
 @dataclass
+class _OffsetAncillas(InstructionVisitor):
+    width: int
+
+    @override
+    def visit_qubit(self, qubit: int) -> int:
+        return qubit + 1 if qubit >= self.width else qubit
+
+
+@dataclass
 class _CircuitBlock:
     instructions: list[InstructionType]
 
@@ -914,8 +925,8 @@ class _CircuitVisitor(qasm3ParserVisitor):
         if self.discard_measurement:
             target_qubit.already_measured = True
         else:
-            target_qubit.index = self.width
-            self.width += 1
+            target_qubit.index = self.width + self.ancillas
+            self.ancillas += 1
             block.instructions.append(Instruction.H(target_qubit.index))
             block.instructions.append(Instruction.CONDINSTR((Instruction.X(target_qubit.index),), {qubit_index}))
 
@@ -926,6 +937,11 @@ class _CircuitVisitor(qasm3ParserVisitor):
             case _DeclKind.Qubit:
                 value = _Qubit(ctx, self.width)
                 self.width += 1
+                # Rename possible ancillas
+                offset_ancillas = _OffsetAncillas(self.width)
+                for instruction in self.block.instructions:
+                    instruction.visit(offset_ancillas)
+
         return value
 
     def declare_registers(
