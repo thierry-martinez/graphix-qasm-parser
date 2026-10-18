@@ -28,7 +28,7 @@ s = """
     rz(5*pi/4) q;
 """
 parser = OpenQASMParser()
-circuit = parser.parse_str(s)
+circuit = parser.parse_str(s).circuit
 pattern = circuit.transpile().pattern
 print(pattern)
 ```
@@ -36,7 +36,7 @@ print(pattern)
 ### Parsing a file:
 
 ```python
-circuit = parser.parse_file("my_circuit.qasm")
+circuit = parser.parse_file("my_circuit.qasm").circuit
 ```
 
 ## Supported Specification
@@ -46,6 +46,10 @@ circuit = parser.parse_file("my_circuit.qasm")
 - Single-qubit registers: `qubit q`, or the old syntax `qreg q`.
 
 - Qubit register arrays: `qubit[n] q`, or the old syntax `qreg q[n]`.
+
+### [Physical qubits](https://openqasm.com/language/types.html#physical-qubits)
+
+Physical (hardware) qubits `$n` are supported.
 
 ### [Classical bits](https://openqasm.com/language/types.html#classical-bits-and-registers)
 
@@ -74,6 +78,7 @@ circuit = parser.parse_file("my_circuit.qasm")
 | [ry](https://openqasm.com/language/standard_library.html#ry)       | RY                  |
 | [rz](https://openqasm.com/language/standard_library.html#rz)       | RZ                  |
 | [swap](https://openqasm.com/language/standard_library.html#swap)   | SWAP                |
+| [ch](https://openqasm.com/language/standard_library.html#ch)       | CU                  |
 | [cx](https://openqasm.com/language/standard_library.html#cx)       | CNOT                |
 | [cy](https://openqasm.com/language/standard_library.html#cz)       | CY                  |
 | [cz](https://openqasm.com/language/standard_library.html#cz)       | CZ                  |
@@ -98,6 +103,9 @@ can be defined and used in expressions.
 
 User gates can be defined with `gate name(parameters) qubits { ... }`.
 
+A custom dictionary of built-in gates can be passed to the `OpenQASMParser` option `builtin_gates`.
+The function `builtin_gates` returns the OpenQASM built-in gate set.
+
 ### [Measurements](https://openqasm.com/language/insts.html#measurement)
 
 Measurements of the form `bit = measure qubit;`, or the old syntax
@@ -105,8 +113,14 @@ Measurements of the form `bit = measure qubit;`, or the old syntax
 
 Both arguments must be registers of the same size, or both must be bit/qubit types.
 
+By default, measured qubits are discarded. To prepare a new qubit
+initialized with the measured value, pass the option
+`discard_measurement=False` to `OpenQASMParser`.
+
 ### [If](https://openqasm.com/language/classical.html#if-else-statements) statements
 
 Statements of the form `if (domain) { ... }` are supported when
 `domain` is a condition expressed as an *XOR* (`^`) combination of
 bits that are the outcomes of previous measurements.
+
+Unnecessary Boolean literal comparisons of the form `bit == true` are supported.

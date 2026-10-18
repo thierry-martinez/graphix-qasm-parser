@@ -18,7 +18,7 @@ qubit q;
 rz(5*pi/4) q;
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 1
     assert len(circuit.instruction) == 1
     instruction = circuit.instruction[0]
@@ -35,7 +35,7 @@ qreg q;
 rz(5*pi/4) q;
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 1
     assert len(circuit.instruction) == 1
     instruction = circuit.instruction[0]
@@ -78,7 +78,7 @@ cu(pi/4, pi/5, pi/6, pi/7) q[0], q[1];
 gphase(pi/3);
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 3
     iterator = iter(circuit.instruction)
     instruction = next(iterator)
@@ -222,7 +222,7 @@ rz(pi) q;
 rz(π) q;
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 1
     iterator = iter(circuit.instruction)
     instruction = next(iterator)
@@ -279,7 +279,7 @@ qubit[SIZE] q;
 rz(alpha) q[0];
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 1
     iterator = iter(circuit.instruction)
     instruction = next(iterator)
@@ -306,7 +306,7 @@ gate cphase(θ) a, b
 cphase(π / 2) q[0], q[1];
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 2
     assert circuit.instruction == [
         Instruction.RZ(0, ANGLE_PI / 4),
@@ -327,7 +327,7 @@ h a; }
 fancyid q;
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 1
     assert circuit.instruction == [Instruction.H(0), Instruction.H(0)]
 
@@ -344,7 +344,7 @@ gate g1 a
 """
     parser = OpenQASMParser()
     with pytest.raises(
-        ValueError,
+        TypeError,
         match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition",
     ):
         parser.parse_str(s)
@@ -369,7 +369,7 @@ creg br2[2];
 br2 = measure qr2;
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 6
     assert circuit.instruction == [
         Instruction.M(0, Axis.Z),
@@ -398,7 +398,7 @@ if (b[0] ^ b[1]) {
  }
 """
     parser = OpenQASMParser()
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 3
     assert circuit.instruction == [
         Instruction.M(2, Axis.Z),
@@ -428,7 +428,7 @@ if (b[0] ^ b[1] ^ b[0]) {
 """
     parser = OpenQASMParser()
     with pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."):
-        circuit = parser.parse_str(s)
+        circuit = parser.parse_str(s).circuit
     assert circuit.width == 3
     assert circuit.instruction == [
         Instruction.M(2, Axis.Z),
@@ -454,10 +454,25 @@ if (b[1] ^ b[1]) {
         pytest.warns(UserWarning, match=r"Conditional instruction with empty condition dropped."),
         pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."),
     ):
-        circuit = parser.parse_str(s)
+        circuit = parser.parse_str(s).circuit
     assert circuit.width == 3
     assert circuit.instruction == [
         Instruction.M(2, Axis.Z),
         Instruction.M(0, Axis.Z),
         Instruction.Z(1),
     ]
+
+
+def test_physical_qubit() -> None:
+    """Test physical qubits."""
+    s = """
+OPENQASM 3.0;
+include "stdgates.inc";
+cx $2, $1;
+h $1;
+"""
+    parser = OpenQASMParser()
+    parsed = parser.parse_str(s)
+    assert parsed.circuit.width == 2
+    assert parsed.physical_qubits == {1: 1, 2: 0}
+    assert parsed.circuit.instruction == [Instruction.CNOT(control=0, target=1), Instruction.H(1)]

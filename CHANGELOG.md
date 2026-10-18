@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- #14, #15: Support for all the gates specified by the OpenQASM 3.0 specification
+- #14, #15, #20: Support for all the gates specified by the OpenQASM 3.0 specification
 
 - #12, #13: Remove incorrect parsing of `crz` gates (@clebrin)
 
@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - #17: Support for `if`-statements
 
 - #18: Support for user gate definitions
+
+- #20:
+  - `parse_str` and `parse_file` return `ParsedCircuit` with mappings from declared identifiers to bit and qubit indices.
+  - The `discard_measurement=False` option in `OpenQASMParser` supports circuits where qubits are used after being measured.
+  - Support for physical qubits.
 
 ## [0.1.1] - 2026-02-05
 
