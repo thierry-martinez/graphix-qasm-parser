@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - #18: Support for user gate definitions
 
+- #21:
+  - `parse_str` and `parse_file` return `ParsedCircuit` instances containing mappings from declared identifiers to bit and qubit indices.
+  - Support for physical qubits.
+
 ## [0.1.1] - 2026-02-05
 
 - #7: Parsing of `CZ` gate

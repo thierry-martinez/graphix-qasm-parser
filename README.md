@@ -28,7 +28,7 @@ s = """
     rz(5*pi/4) q;
 """
 parser = OpenQASMParser()
-circuit = parser.parse_str(s)
+circuit = parser.parse_str(s).circuit
 pattern = circuit.transpile().pattern
 print(pattern)
 ```
@@ -36,7 +36,28 @@ print(pattern)
 ### Parsing a file:
 
 ```python
-circuit = parser.parse_file("my_circuit.qasm")
+circuit = parser.parse_file("my_circuit.qasm").circuit
+```
+
+### Mapping declarations
+
+Methods `parse_str` and `parse_file` return a `ParsedCircuit`
+instance.  This dataclass exposes the Graphix circuit itself through
+the `circuit` attribute. The other attributes are mapping from the
+symbols declared in the OpenQASM document to the indices of the
+corresponding qubits in the circuit.
+
+```python
+from graphix_qasm_parser import OpenQASMParser
+
+s = """
+    include "qelib1.inc";
+    qubit q;
+    rz(5*pi/4) q;
+"""
+parser = OpenQASMParser()
+parsed = parser.parse_str(s)
+print(parsed.qubits)  # {'q': 0}
 ```
 
 ## Supported Specification
@@ -46,6 +67,10 @@ circuit = parser.parse_file("my_circuit.qasm")
 - Single-qubit registers: `qubit q`, or the old syntax `qreg q`.
 
 - Qubit register arrays: `qubit[n] q`, or the old syntax `qreg q[n]`.
+
+### [Physical qubits](https://openqasm.com/language/types.html#physical-qubits)
+
+Physical (hardware) qubits `$n` are supported.
 
 ### [Classical bits](https://openqasm.com/language/types.html#classical-bits-and-registers)
 

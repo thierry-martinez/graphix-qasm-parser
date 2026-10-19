@@ -13,6 +13,7 @@ from antlr4 import (  # type: ignore[attr-defined]
     FileStream,
     InputStream,
     ParserRuleContext,
+    TerminalNode,
 )
 from graphix import ANGLE_PI, Axis, Circuit, Instruction, rad_to_angle
 from graphix.instruction import InstructionVisitor
@@ -23,7 +24,7 @@ from openqasm_parser import qasm3Lexer, qasm3Parser, qasm3ParserVisitor
 from typing_extensions import override
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Mapping
     from pathlib import Path
 
     from antlr4.token import Token
@@ -32,25 +33,102 @@ if TYPE_CHECKING:
     from graphix.parameters import Expression, Parameter
 
 
+@dataclass(frozen=True)
+class ParsedCircuit:
+    """
+    Parsed circuit.
+
+    Attributes:
+    ----------
+    circuit : Circuit
+        The circuit.
+    qubits : Mapping[str, int | tuple[int, ...]]
+        Mapping ordered by the program declaration order, mapping
+        quantum register identifiers to the indices of the
+        corresponding qubits in ``circuit``.
+    physical_qubits: Mapping[int, int]
+        Mapping ordered by the first occurrence order, mapping
+        physical qubits to the indices of the corresponding qubits in
+        ``circuit``.
+    bits: Mapping[str, int | tuple[int | None, ...] | None]
+        Mapping ordered by the program declaration order, mapping
+        classical register identifiers to the indices of the last
+        measured qubit assigned to them in ``circuit`` if any, or
+        ``None`` otherwise.
+
+    Example:
+    -------
+    >>> from graphix_qasm_parser import OpenQASMParser
+    >>> s = '''
+    ... qubit[2] q;
+    ... bit[3] b;
+    ... cx $1, $2;
+    ... qubit single_q;
+    ... bit single_b;
+    ... single_b = measure $3;
+    ... '''
+    >>> parser = OpenQASMParser()
+    >>> parsed = parser.parse_str(s)
+    >>> assert parsed.circuit.width == 6
+    >>> assert parsed.qubits == {"q": (0, 1), "single_q": 4}
+    >>> assert parsed.bits == {"b": (None, None, None), "single_b": 5}
+    >>> assert parsed.physical_qubits == {1: 2, 2: 3, 3: 5}
+
+    """
+
+    circuit: Circuit
+    qubits: Mapping[str, int | tuple[int, ...]]
+    physical_qubits: Mapping[int, int]
+    bits: Mapping[str, int | tuple[int | None, ...] | None]
+
+
 class OpenQASMParser:
     """Graphix OpenQASM parser."""
 
-    def parse_stream(self, stream: InputStream) -> Circuit:
-        """Parse the OpenQASM circuit described in the given stream."""
+    def parse_stream(self, stream: InputStream) -> ParsedCircuit:
+        """
+        Parse the OpenQASM circuit described in the given stream.
+
+        Parameters
+        ----------
+        stream : InputStream
+            The input stream to parse.
+
+        Returns
+        -------
+        ParsedCircuit
+            The parsed circuit.
+
+        """
         lexer = qasm3Lexer(stream)
         tokens = CommonTokenStream(lexer)
         parser = qasm3Parser(tokens)
         tree = parser.program()  # type: ignore[no-untyped-call]
         visitor = _CircuitVisitor(self)
         tree.accept(visitor)
-        return Circuit(visitor.width, instr=visitor.instructions)
+        circuit = Circuit(visitor.width, instr=visitor.instructions)
+        qubits: dict[str, int | tuple[int, ...]] = {}
+        bits: dict[str, int | tuple[int | None, ...] | None] = {}
+        for identifier in visitor.declared_symbols:
+            value = visitor.env[identifier]
+            if isinstance(value, _Array):
+                if isinstance(value.values[0], _Bit):
+                    bits[identifier] = tuple(value.index for value in value.values if isinstance(value, _Bit))
+                else:
+                    qubits[identifier] = tuple(value.index for value in value.values if isinstance(value, _Qubit))
+            elif isinstance(value, _Bit):
+                bits[identifier] = value.index
+            elif isinstance(value, _Qubit):
+                qubits[identifier] = value.index
+        physical_qubits = {index: qubit.index for index, qubit in visitor.physical_qubits.items()}
+        return ParsedCircuit(circuit, qubits, physical_qubits, bits)
 
-    def parse_str(self, s: str) -> Circuit:
+    def parse_str(self, s: str) -> ParsedCircuit:
         """Parse the OpenQASM circuit described in the given string."""
         stream = InputStream(s)
         return self.parse_stream(stream)
 
-    def parse_file(self, path: Path | str) -> Circuit:
+    def parse_file(self, path: Path | str) -> ParsedCircuit:
         """Parse the OpenQASM circuit described in the given file."""
         stream = FileStream(str(path))
         return self.parse_stream(stream)
@@ -570,6 +648,8 @@ class _CircuitVisitor(qasm3ParserVisitor):
     env: dict[str, _Value]
     user_defined_gates: dict[str, _Gate]
     inside_gate_definition: bool
+    declared_symbols: list[str]
+    physical_qubits: dict[int, _Qubit]
 
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
@@ -582,6 +662,8 @@ class _CircuitVisitor(qasm3ParserVisitor):
         }
         self.user_defined_gates = {}
         self.inside_gate_definition = False
+        self.declared_symbols = []
+        self.physical_qubits = {}
 
     def check_not_inside_gate_definition(self, ctx: ParserRuleContext) -> None:  # type: ignore[valid-type]
         if self.inside_gate_definition:
@@ -744,10 +826,13 @@ class _CircuitVisitor(qasm3ParserVisitor):
     def declare_register(self, ctx: ParserRuleContext, decl_kind: _DeclKind) -> _Value:  # type: ignore[valid-type]
         match decl_kind:
             case _DeclKind.Bit:
-                value: _Value = _Bit(ctx)
+                return _Bit(ctx)
             case _DeclKind.Qubit:
-                value = _Qubit(ctx, self.width)
-                self.width += 1
+                return self.declare_qubit(ctx)
+
+    def declare_qubit(self, ctx: ParserRuleContext) -> _Qubit:  # type: ignore[valid-type]
+        value = _Qubit(ctx, self.width)
+        self.width += 1
         return value
 
     def declare_registers(
@@ -765,6 +850,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         else:
             value = self.declare_register(ctx, decl_kind)
         self.env[identifier] = value
+        self.declared_symbols.append(identifier)
 
     def convert_qubit_index(self, operand: qasm3Parser.GateOperandContext) -> int:
         value = self.evaluate_operand(operand)
@@ -772,6 +858,17 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     def evaluate_operand(self, operand: qasm3Parser.GateOperandContext) -> _Value:
         child = operand.getChild(0)
+        if isinstance(child, TerminalNode):
+            text = child.getText()  # type: ignore[attr-defined]
+            if text[0] != "$":
+                msg = f"Physical qubit expected but {text} found"
+                raise ValueError(text)
+            index = int(text[1:])
+            value = self.physical_qubits.get(index)
+            if value is None:
+                value = self.declare_qubit(child)
+                self.physical_qubits[index] = value
+            return value
         if child.getRuleIndex() == qasm3Parser.RULE_indexedIdentifier:
             return self.evaluate_indexed_identifier(child)
         msg = f"Unknown operand: {operand}"
