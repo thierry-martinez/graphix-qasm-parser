@@ -5,6 +5,7 @@ from __future__ import annotations
 import enum
 import math
 from abc import ABC, abstractmethod
+from copy import copy
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Generic, TypeVar
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 
     from antlr4.token import Token
     from graphix.fundamentals import ParameterizedAngle
-    from graphix.instruction import InstructionType
+    from graphix.instruction import InstructionType, InstructionTypeWithoutM
     from graphix.parameters import Expression, Parameter
 
 
@@ -67,7 +68,7 @@ class OpenQASMParser:
         tree.accept(visitor)
         for msg in visitor.warnings:
             warn(msg, stacklevel=stacklevel + 1)
-        return Circuit(visitor.width, instr=visitor.instructions)
+        return Circuit(visitor.width, instr=visitor.block.instructions)
 
     def parse_str(self, s: str, *, stacklevel: int = 1) -> Circuit:
         """
@@ -414,7 +415,7 @@ class _Array(_Value):
 @dataclass(frozen=True)
 class _Gate:
     qubit_count: int
-    instructions: tuple[InstructionType, ...]
+    instructions: tuple[InstructionTypeWithoutM, ...]
     params: tuple[Parameter, ...] = ()
 
 
@@ -429,7 +430,7 @@ _Lambda = Placeholder("Lambda")
 
 def _u3(
     target: int, theta: ParameterizedAngle, phi: ParameterizedAngle, lambda_: ParameterizedAngle
-) -> tuple[InstructionType, ...]:
+) -> tuple[InstructionTypeWithoutM, ...]:
     return (
         Instruction.U(target=target, theta=theta, phi=phi, lambda_=lambda_),
         # Overcome limitation of placeholders that cannot be summed.
@@ -633,37 +634,52 @@ class _SubstGate(InstructionVisitor):
         return self.subst_qubits[qubit]
 
 
+@dataclass
+class _CircuitBlock:
+    instructions: list[InstructionType]
+
+
+@dataclass
+class _GateDefinitionBlock:
+    instructions: list[InstructionTypeWithoutM]
+
+
+@dataclass
+class _ConditionalBlock:
+    instructions: list[InstructionTypeWithoutM]
+
+
+BASE_ENV: dict[str, _Value] = {
+    "pi": _Float("pi", math.pi),
+    "π": _Float("π", math.pi),
+}
+
+
 class _CircuitVisitor(qasm3ParserVisitor):
     parser: OpenQASMParser
     width: int
-    measurement_count: int
-    instructions: list[InstructionType]
+    block: _CircuitBlock | _GateDefinitionBlock | _ConditionalBlock
     env: dict[str, _Value]
     warnings: list[str]
     user_defined_gates: dict[str, _Gate]
-    inside_gate_definition: bool
 
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
         self.width = 0
-        self.measurement_count = 0
-        self.instructions = []
-        self.env = {
-            "pi": _Float("pi", math.pi),
-            "π": _Float("π", math.pi),
-        }
+        self.block = _CircuitBlock([])
+        self.env = BASE_ENV
         self.warnings = []
         self.user_defined_gates = {}
-        self.inside_gate_definition = False
 
-    def check_not_inside_gate_definition(self, ctx: ParserRuleContext) -> None:  # type: ignore[valid-type]
-        if self.inside_gate_definition:
-            msg = f"Only built-in gate statements and calls to previously defined gates can appear in body of gate definition: {ctx}"
-            raise ValueError(msg)
+    def expect_circuit_block(self, ctx: ParserRuleContext) -> _CircuitBlock:  # type: ignore[valid-type]
+        if not isinstance(self.block, _CircuitBlock):
+            msg = f"Only built-in gate statements and calls to previously defined gates can appear in body of gate definition or conditional: {ctx}"
+            raise TypeError(msg)
+        return self.block
 
     @override
     def visitOldStyleDeclarationStatement(self, ctx: qasm3Parser.OldStyleDeclarationStatementContext) -> None:
-        self.check_not_inside_gate_definition(ctx)
+        self.expect_circuit_block(ctx)
         kind = ctx.getChild(0)
         if kind.symbol.type == qasm3Parser.QREG:
             decl_kind = _DeclKind.Qubit
@@ -678,13 +694,14 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     @override
     def visitQuantumDeclarationStatement(self, ctx: qasm3Parser.QuantumDeclarationStatementContext) -> None:
-        self.check_not_inside_gate_definition(ctx)
+        self.expect_circuit_block(ctx)
         designator = ctx.qubitType().designator()  # type: ignore[no-untyped-call]
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         self.declare_registers(ctx, _DeclKind.Qubit, identifier, designator)
 
     @override
     def visitClassicalDeclarationStatement(self, ctx: qasm3Parser.ClassicalDeclarationStatementContext) -> None:
+        self.expect_circuit_block(ctx)
         scalar_type = ctx.scalarType()  # type: ignore[no-untyped-call]
         if scalar_type is None or scalar_type.BIT() is None:
             msg = "Only bit type is supported."
@@ -695,7 +712,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
 
     @override
     def visitConstDeclarationStatement(self, ctx: qasm3Parser.ConstDeclarationStatementContext) -> None:
-        self.check_not_inside_gate_definition(ctx)
+        self.expect_circuit_block(ctx)
         identifier = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         value = ctx.declarationExpression()  # type: ignore[no-untyped-call]
         expr = self.evaluate_expression(value)
@@ -716,8 +733,8 @@ class _CircuitVisitor(qasm3ParserVisitor):
             # `gphase` is parsed as a keyword rather than as an
             # identifier name (`ctx.Identifier()` returns `None` in
             # this case), so it should be handled specially.
-            instruction: InstructionType = Instruction.GPHASE(angle=rad_to_angle(exprs[0]))
-            self.instructions.append(instruction)
+            instruction: InstructionTypeWithoutM = Instruction.GPHASE(angle=rad_to_angle(exprs[0]))
+            self.block.instructions.append(instruction)
             return
         gate_name = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         operand_list = ctx.gateOperandList()  # type: ignore[no-untyped-call]
@@ -742,31 +759,29 @@ class _CircuitVisitor(qasm3ParserVisitor):
         subst_gate = _SubstGate(subst_params, subst_qubits)
         for instruction in gate.instructions:
             local_instruction = instruction.visit(subst_gate, copy=True)
-            self.instructions.append(local_instruction)
+            self.block.instructions.append(local_instruction)
 
     @override
     def visitGateStatement(self, ctx: qasm3Parser.GateStatementContext) -> None:
-        self.check_not_inside_gate_definition(ctx)
+        parent_block = self.expect_circuit_block(ctx)
         name = ctx.Identifier().getText()  # type: ignore[no-untyped-call]
         param_identifiers: Collection[Token] = ctx.params.Identifier() if ctx.params else ()
         qubit_identifiers: Collection[Token] = ctx.qubits.Identifier() if ctx.qubits else ()
         scope = ctx.scope()  # type: ignore[no-untyped-call]
-        parent_instructions = self.instructions
         parent_env = self.env
-        self.instructions = []
+        sub_block = _GateDefinitionBlock([])
+        self.block = sub_block
         params = tuple(Placeholder(param.getText()) for param in param_identifiers)
-        self.env = {}
+        self.env = copy(BASE_ENV)
         for param_ctx, param in zip(param_identifiers, params, strict=True):
             self.env[param.name] = _Expression(param_ctx, param)
         for qubit_index, qubit_identifier in enumerate(qubit_identifiers):
             self.env[qubit_identifier.getText()] = _Qubit(qubit_identifier, qubit_index)
-        self.inside_gate_definition = True
         scope.accept(self)
-        self.inside_gate_definition = False
         self.user_defined_gates[name] = _Gate(
-            params=params, qubit_count=len(qubit_identifiers), instructions=tuple(self.instructions)
+            params=params, qubit_count=len(qubit_identifiers), instructions=tuple(sub_block.instructions)
         )
-        self.instructions = parent_instructions
+        self.block = parent_block
         self.env = parent_env
 
     @override
@@ -792,17 +807,18 @@ class _CircuitVisitor(qasm3ParserVisitor):
             raise NotImplementedError(msg)
         statement_or_scope = ctx.statementOrScope(0)
         domain = self.evaluate_domain(expression)
-        parent_instructions = self.instructions
-        self.instructions = []
+        parent_block = self.block
+        conditional_block = _ConditionalBlock([])
+        self.block = conditional_block
         statement_or_scope.accept(self)
-        body = self.instructions
-        self.instructions = parent_instructions
+        body = conditional_block.instructions
+        self.block = parent_block
         if domain:
             instruction = Instruction.CONDINSTR(tuple(body), domain)
-            self.instructions.append(instruction)
+            parent_block.instructions.append(instruction)
         else:
             self.warnings.append("Conditional instruction with empty condition dropped.")
-            self.instructions.extend(body)
+            parent_block.instructions.extend(body)
 
     def add_measurement_statement(
         self,
@@ -820,19 +836,19 @@ class _CircuitVisitor(qasm3ParserVisitor):
                 msg = "Both registers must have the same size."
                 raise ValueError(msg)
             for bit, qubit in zip(target_bit.values, target_qubit.values, strict=True):
-                self.add_measurement(bit, qubit)
+                self.add_measurement(measure_expression, bit, qubit)
             return
-        self.add_measurement(target_bit, target_qubit)
+        self.add_measurement(measure_expression, target_bit, target_qubit)
 
-    def add_measurement(self, target_bit: _Value, target_qubit: _Value) -> None:
+    def add_measurement(self, ctx: ParserRuleContext, target_bit: _Value, target_qubit: _Value) -> None:  # type: ignore[valid-type]
+        block = self.expect_circuit_block(ctx)
         if not isinstance(target_bit, _Bit):
             msg = f"Only assignment to bit is supported: {target_bit} unexpected."
             raise NotImplementedError(msg)
         qubit_index = target_qubit.as_qubit().index
         instruction = Instruction.M(qubit_index, Axis.Z)
-        self.instructions.append(instruction)
+        block.instructions.append(instruction)
         target_bit.index = qubit_index
-        self.measurement_count += 1
 
     def declare_register(self, ctx: ParserRuleContext, decl_kind: _DeclKind) -> _Value:  # type: ignore[valid-type]
         match decl_kind:
