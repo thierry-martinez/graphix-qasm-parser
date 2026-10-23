@@ -104,3 +104,9 @@ Measurements of the form `bit = measure qubit;`, or the old syntax
 `measure qubit -> bit`, are supported.
 
 Both arguments must be registers of the same size, or both must be bit/qubit types.
+
+### [If](https://openqasm.com/language/classical.html#if-else-statements) statements
+
+Statements of the form `if (domain) { ... }` are supported when
+`domain` is a condition expressed as an *XOR* (`^`) combination of
+bits that are the outcomes of previous measurements.
