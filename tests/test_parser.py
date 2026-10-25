@@ -1,5 +1,7 @@
 """Tests for Graphix QASM parser."""
 
+from __future__ import annotations
+
 import math
 
 import pytest
@@ -94,7 +96,8 @@ gphase(pi/3);
     assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.CZ)
-    assert instruction.targets == (0, 1)
+    assert instruction.target == 1
+    assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.CH)
     assert instruction.target == 1
@@ -393,8 +396,8 @@ gate g1 a
 """
     parser = OpenQASMParser()
     with pytest.raises(
-        ValueError,
-        match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition",
+        TypeError,
+        match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition or conditional",
     ):
         parser.parse_str(s)
 
@@ -427,4 +430,86 @@ br2 = measure qr2;
         Instruction.M(3, Axis.Z),
         Instruction.M(4, Axis.Z),
         Instruction.M(5, Axis.Z),
+    ]
+
+
+def test_if_statements() -> None:
+    """Test if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+if (b[0]) {
+    x q[0];
+}
+b[1] = measure q[0];
+if (b[0] ^ b[1]) {
+    x q[1];
+    z q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.CONDINSTR((Instruction.X(0),), {2}),
+        Instruction.M(0, Axis.Z),
+        Instruction.CONDINSTR(
+            (
+                Instruction.X(1),
+                Instruction.Z(1),
+            ),
+            {0, 2},
+        ),
+    ]
+
+
+def test_redundant_if_statements() -> None:
+    """Test redundant if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+b[1] = measure q[0];
+if (b[0] ^ b[1] ^ b[0]) {
+    x q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    with pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."):
+        circuit = parser.parse_str(s)
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.M(0, Axis.Z),
+        Instruction.CONDINSTR((Instruction.X(1),), {0}),
+    ]
+
+
+def test_void_if_statements() -> None:
+    """Test if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+b[1] = measure q[0];
+if (b[1] ^ b[1]) {
+    z q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    with (
+        pytest.warns(UserWarning, match=r"Conditional instruction with empty condition dropped."),
+        pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."),
+    ):
+        circuit = parser.parse_str(s)
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.M(0, Axis.Z),
+        Instruction.Z(1),
     ]

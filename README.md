@@ -88,11 +88,10 @@ circuit = parser.parse_file("my_circuit.qasm")
 | [cswap](https://openqasm.com/language/standard_library.html#cswap)   | CSWAP               |
 | [ccx](https://openqasm.com/language/standard_library.html#ccx)       | CCX                 |
 | [gphase](https://openqasm.com/language/gates.html#gphase)            | GPHASE              |
-| [u1](https://openqasm.com/language/gates.html#u1)                    | P                   |
-| [u2](https://openqasm.com/language/gates.html#u2)                    | U + GPHASE          |
-| [u3](https://openqasm.com/language/gates.html#u3)                    | U + GPHASE          |
-| [CX](https://openqasm.com/language/gates.html#CX)                    | CNOT                |
-|                                                                      |                     |
+| [u1](https://openqasm.com/language/standard_library.html#u1)         | P                   |
+| [u2](https://openqasm.com/language/standard_library.html#u2)         | U + GPHASE          |
+| [u3](https://openqasm.com/language/standard_library.html#u3)         | U + GPHASE          |
+| [CX](https://openqasm.com/language/standard_library.html#CX)         | CNOT                |
 
 ### Expressions
 
@@ -112,3 +111,9 @@ Measurements of the form `bit = measure qubit;`, or the old syntax
 `measure qubit -> bit`, are supported.
 
 Both arguments must be registers of the same size, or both must be bit/qubit types.
+
+### [If](https://openqasm.com/language/classical.html#if-else-statements) statements
+
+Statements of the form `if (domain) { ... }` are supported when
+`domain` is a condition expressed as an *XOR* (`^`) combination of
+bits that are the outcomes of previous measurements.
