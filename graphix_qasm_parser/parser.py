@@ -814,7 +814,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         body = conditional_block.instructions
         self.block = parent_block
         if domain:
-            instruction = Instruction.CONDINSTR(tuple(body), domain)
+            instruction = Instruction.CONDINSTR(domain, tuple(body))
             parent_block.instructions.append(instruction)
         else:
             self.warnings.append("Conditional instruction with empty condition dropped.")
