@@ -86,4 +86,4 @@ reportUnknownLambdaType = "information"
 # reportUnknownVariableType = "information"
 
 [tool.uv.sources]
-graphix = { git = "https://github.com/TeamGraphix/graphix.git", rev = "refs/pull/624/head" }
+graphix = { git = "https://github.com/TeamGraphix/graphix.git" }
