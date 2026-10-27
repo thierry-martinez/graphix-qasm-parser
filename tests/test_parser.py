@@ -53,6 +53,7 @@ ccx q[0], q[1], q[2];
 cx q[0], q[1];
 cy q[0], q[1];
 cz q[0], q[1];
+ch q[0], q[1];
 swap q[0], q[1];
 cswap q[0], q[1], q[2];
 h q[0];
@@ -95,6 +96,10 @@ gphase(pi/3);
     assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.CZ)
+    assert instruction.target == 1
+    assert instruction.control == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CH)
     assert instruction.target == 1
     assert instruction.control == 0
     instruction = next(iterator)
@@ -206,6 +211,52 @@ gphase(pi/3);
         next(iterator)
 
 
+def test_u2() -> None:
+    """Test parse compatibility gate u2."""
+    s = """
+qubit q;
+u2(pi/3, pi/4) q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 1
+    assert circuit.instruction == [
+        Instruction.U(target=0, theta=ANGLE_PI / 2, phi=ANGLE_PI / 3, lambda_=ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 6),
+        Instruction.GPHASE(-ANGLE_PI / 8),
+    ]
+
+
+def test_u3() -> None:
+    """Test parse compatibility gate u3."""
+    s = """
+qubit q;
+u3(pi/2, pi/3, pi/4) q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 1
+    assert circuit.instruction == [
+        Instruction.U(target=0, theta=ANGLE_PI / 2, phi=ANGLE_PI / 3, lambda_=ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 6),
+        Instruction.GPHASE(-ANGLE_PI / 8),
+    ]
+
+
+def test_legacy_cx() -> None:
+    """Test parse compatibility gate CX."""
+    s = """
+qubit[2] q;
+CX q[0], q[1];
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s)
+    assert circuit.width == 2
+    assert circuit.instruction == [Instruction.CNOT(control=0, target=1)]
+
+
 def test_parse_all_expressions() -> None:
     """Test parse all expressions."""
     s = """
@@ -296,15 +347,15 @@ def test_gate_definition() -> None:
     # Excerpt of https://openqasm.com/language/gates.html#defining-gates
     s = """
 qubit[2] q;
-gate cphase(θ) a, b
+gate cphase2(θ) a, b
 {
   rz(θ / 2) a;
-  cx a, b;
+  CX a, b;
   rz(-θ / 2) b;
-  cx a, b;
+  CX a, b;
   rz(θ / 2) b;
 }
-cphase(π / 2) q[0], q[1];
+cphase2(π / 2) q[0], q[1];
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s)

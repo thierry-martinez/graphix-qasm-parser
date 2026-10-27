@@ -451,6 +451,11 @@ _BuiltinGates: dict[str, _Gate] = {
         qubit_count=2,
         instructions=(Instruction.CNOT(control=0, target=1),),
     ),
+    "CX":  # https://openqasm.com/language/standard_library.html#CX
+    _Gate(
+        qubit_count=2,
+        instructions=(Instruction.CNOT(control=0, target=1),),
+    ),
     "cy":  # https://openqasm.com/language/standard_library.html#cy
     _Gate(
         qubit_count=2,
@@ -460,6 +465,11 @@ _BuiltinGates: dict[str, _Gate] = {
     _Gate(
         qubit_count=2,
         instructions=(Instruction.CZ(control=0, target=1),),
+    ),
+    "ch":  # https://openqasm.com/language/standard_library.html#ch
+    _Gate(
+        qubit_count=2,
+        instructions=(Instruction.CH(control=0, target=1),),
     ),
     "swap":  # https://openqasm.com/language/standard_library.html#swap
     _Gate(
@@ -532,6 +542,12 @@ _BuiltinGates: dict[str, _Gate] = {
         qubit_count=1,
         instructions=(Instruction.P(target=0, angle=rad_to_angle(_Theta)),),
     ),
+    "phase":  # https://openqasm.com/language/standard_library.html#phase
+    _Gate(
+        params=(_Theta,),
+        qubit_count=1,
+        instructions=(Instruction.P(target=0, angle=rad_to_angle(_Theta)),),
+    ),
     "u1":  # https://openqasm.com/language/standard_library.html#u1
     _Gate(
         params=(_Theta,),
@@ -565,6 +581,12 @@ _BuiltinGates: dict[str, _Gate] = {
         ),
     ),
     "cp":  # https://openqasm.com/language/standard_library.html#cp
+    _Gate(
+        params=(_Theta,),
+        qubit_count=2,
+        instructions=(Instruction.CP(control=0, target=1, angle=rad_to_angle(_Theta)),),
+    ),
+    "cphase":  # https://openqasm.com/language/standard_library.html#cphase
     _Gate(
         params=(_Theta,),
         qubit_count=2,
