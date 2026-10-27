@@ -80,36 +80,43 @@ Physical (hardware) qubits `$n` are supported.
 
 ### Supported Gates
 
-| OpenQASM gate                                                      | Graphix instruction |
-|--------------------------------------------------------------------|---------------------|
-| [h](https://openqasm.com/language/standard_library.html#h)         | H                   |
-| [s](https://openqasm.com/language/standard_library.html#s)         | S                   |
-| [sdg](https://openqasm.com/language/standard_library.html#sdg)     | SDG                 |
-| [t](https://openqasm.com/language/standard_library.html#t)         | T                   |
-| [tdg](https://openqasm.com/language/standard_library.html#tdg)     | TDG                 |
-| [sx](https://openqasm.com/language/standard_library.html#sx)       | SX                  |
-| [sxdg](https://openqasm.com/language/standard_library.html#sxdg)   | SXDG                |
-| [id](https://openqasm.com/language/standard_library.html#id)       | I                   |
-| [x](https://openqasm.com/language/standard_library.html#x)         | X                   |
-| [y](https://openqasm.com/language/standard_library.html#y)         | Y                   |
-| [z](https://openqasm.com/language/standard_library.html#z)         | Z                   |
-| [U](https://openqasm.com/language/gates.html#U)                    | U                   |
-| [p](https://openqasm.com/language/standard_library.html#p)         | P                   |
-| [rx](https://openqasm.com/language/standard_library.html#rx)       | RX                  |
-| [ry](https://openqasm.com/language/standard_library.html#ry)       | RY                  |
-| [rz](https://openqasm.com/language/standard_library.html#rz)       | RZ                  |
-| [swap](https://openqasm.com/language/standard_library.html#swap)   | SWAP                |
-| [cx](https://openqasm.com/language/standard_library.html#cx)       | CNOT                |
-| [cy](https://openqasm.com/language/standard_library.html#cz)       | CY                  |
-| [cz](https://openqasm.com/language/standard_library.html#cz)       | CZ                  |
-| [cu](https://openqasm.com/language/standard_library.html#cu)       | CU                  |
-| [cp](https://openqasm.com/language/standard_library.html#cp)       | CP                  |
-| [crx](https://openqasm.com/language/standard_library.html#crx)     | CRX                 |
-| [cry](https://openqasm.com/language/standard_library.html#cry)     | CRY                 |
-| [crz](https://openqasm.com/language/standard_library.html#crz)     | CRZ                 |
-| [cswap](https://openqasm.com/language/standard_library.html#cswap) | CSWAP               |
-| [ccx](https://openqasm.com/language/standard_library.html#ccx)     | CCX                 |
-| [gphase](https://openqasm.com/language/gates.html#gphase)          | GPHASE              |
+| OpenQASM gate                                                        | Graphix instruction |
+|----------------------------------------------------------------------|---------------------|
+| [h](https://openqasm.com/language/standard_library.html#h)           | H                   |
+| [s](https://openqasm.com/language/standard_library.html#s)           | S                   |
+| [sdg](https://openqasm.com/language/standard_library.html#sdg)       | SDG                 |
+| [t](https://openqasm.com/language/standard_library.html#t)           | T                   |
+| [tdg](https://openqasm.com/language/standard_library.html#tdg)       | TDG                 |
+| [sx](https://openqasm.com/language/standard_library.html#sx)         | SX                  |
+| [sxdg](https://openqasm.com/language/standard_library.html#sxdg)     | SXDG                |
+| [id](https://openqasm.com/language/standard_library.html#id)         | I                   |
+| [x](https://openqasm.com/language/standard_library.html#x)           | X                   |
+| [y](https://openqasm.com/language/standard_library.html#y)           | Y                   |
+| [z](https://openqasm.com/language/standard_library.html#z)           | Z                   |
+| [U](https://openqasm.com/language/gates.html#U)                      | U                   |
+| [p](https://openqasm.com/language/standard_library.html#p)           | P                   |
+| [phase](https://openqasm.com/language/standard_library.html#phase)   | P                   |
+| [rx](https://openqasm.com/language/standard_library.html#rx)         | RX                  |
+| [ry](https://openqasm.com/language/standard_library.html#ry)         | RY                  |
+| [rz](https://openqasm.com/language/standard_library.html#rz)         | RZ                  |
+| [swap](https://openqasm.com/language/standard_library.html#swap)     | SWAP                |
+| [cx](https://openqasm.com/language/standard_library.html#cx)         | CNOT                |
+| [cy](https://openqasm.com/language/standard_library.html#cz)         | CY                  |
+| [cz](https://openqasm.com/language/standard_library.html#cz)         | CZ                  |
+| [cu](https://openqasm.com/language/standard_library.html#cu)         | CU                  |
+| [cp](https://openqasm.com/language/standard_library.html#cp)         | CP                  |
+| [cphase](https://openqasm.com/language/standard_library.html#cphase) | CP                  |
+| [crx](https://openqasm.com/language/standard_library.html#crx)       | CRX                 |
+| [cry](https://openqasm.com/language/standard_library.html#cry)       | CRY                 |
+| [crz](https://openqasm.com/language/standard_library.html#crz)       | CRZ                 |
+| [ch](https://openqasm.com/language/standard_library.html#ch)         | CH                  |
+| [cswap](https://openqasm.com/language/standard_library.html#cswap)   | CSWAP               |
+| [ccx](https://openqasm.com/language/standard_library.html#ccx)       | CCX                 |
+| [gphase](https://openqasm.com/language/gates.html#gphase)            | GPHASE              |
+| [u1](https://openqasm.com/language/standard_library.html#u1)         | P                   |
+| [u2](https://openqasm.com/language/standard_library.html#u2)         | U + GPHASE          |
+| [u3](https://openqasm.com/language/standard_library.html#u3)         | U + GPHASE          |
+| [CX](https://openqasm.com/language/standard_library.html#CX)         | CNOT                |
 
 ### Expressions
 
@@ -129,3 +136,9 @@ Measurements of the form `bit = measure qubit;`, or the old syntax
 `measure qubit -> bit`, are supported.
 
 Both arguments must be registers of the same size, or both must be bit/qubit types.
+
+### [If](https://openqasm.com/language/classical.html#if-else-statements) statements
+
+Statements of the form `if (domain) { ... }` are supported when
+`domain` is a condition expressed as an *XOR* (`^`) combination of
+bits that are the outcomes of previous measurements.

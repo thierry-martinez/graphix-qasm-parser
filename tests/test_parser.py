@@ -1,5 +1,7 @@
 """Tests for Graphix QASM parser."""
 
+from __future__ import annotations
+
 import math
 
 import pytest
@@ -51,6 +53,7 @@ ccx q[0], q[1], q[2];
 cx q[0], q[1];
 cy q[0], q[1];
 cz q[0], q[1];
+ch q[0], q[1];
 swap q[0], q[1];
 cswap q[0], q[1], q[2];
 h q[0];
@@ -93,7 +96,12 @@ gphase(pi/3);
     assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.CZ)
-    assert instruction.targets == (0, 1)
+    assert instruction.target == 1
+    assert instruction.control == 0
+    instruction = next(iterator)
+    assert isinstance(instruction, Instruction.CH)
+    assert instruction.target == 1
+    assert instruction.control == 0
     instruction = next(iterator)
     assert isinstance(instruction, Instruction.SWAP)
     assert instruction.targets == (0, 1)
@@ -203,6 +211,52 @@ gphase(pi/3);
         next(iterator)
 
 
+def test_u2() -> None:
+    """Test parse compatibility gate u2."""
+    s = """
+qubit q;
+u2(pi/3, pi/4) q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s).circuit
+    assert circuit.width == 1
+    assert circuit.instruction == [
+        Instruction.U(target=0, theta=ANGLE_PI / 2, phi=ANGLE_PI / 3, lambda_=ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 6),
+        Instruction.GPHASE(-ANGLE_PI / 8),
+    ]
+
+
+def test_u3() -> None:
+    """Test parse compatibility gate u3."""
+    s = """
+qubit q;
+u3(pi/2, pi/3, pi/4) q;
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s).circuit
+    assert circuit.width == 1
+    assert circuit.instruction == [
+        Instruction.U(target=0, theta=ANGLE_PI / 2, phi=ANGLE_PI / 3, lambda_=ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 4),
+        Instruction.GPHASE(-ANGLE_PI / 6),
+        Instruction.GPHASE(-ANGLE_PI / 8),
+    ]
+
+
+def test_legacy_cx() -> None:
+    """Test parse compatibility gate CX."""
+    s = """
+qubit[2] q;
+CX q[0], q[1];
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s).circuit
+    assert circuit.width == 2
+    assert circuit.instruction == [Instruction.CNOT(control=0, target=1)]
+
+
 def test_parse_all_expressions() -> None:
     """Test parse all expressions."""
     s = """
@@ -293,15 +347,15 @@ def test_gate_definition() -> None:
     # Excerpt of https://openqasm.com/language/gates.html#defining-gates
     s = """
 qubit[2] q;
-gate cphase(θ) a, b
+gate cphase2(θ) a, b
 {
   rz(θ / 2) a;
-  cx a, b;
+  CX a, b;
   rz(-θ / 2) b;
-  cx a, b;
+  CX a, b;
   rz(θ / 2) b;
 }
-cphase(π / 2) q[0], q[1];
+cphase2(π / 2) q[0], q[1];
 """
     parser = OpenQASMParser()
     circuit = parser.parse_str(s).circuit
@@ -342,8 +396,8 @@ gate g1 a
 """
     parser = OpenQASMParser()
     with pytest.raises(
-        ValueError,
-        match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition",
+        TypeError,
+        match="Only built-in gate statements and calls to previously defined gates can appear in body of gate definition or conditional",
     ):
         parser.parse_str(s)
 
@@ -392,3 +446,79 @@ h $1;
     assert parsed.circuit.width == 2
     assert parsed.physical_qubits == {1: 1, 2: 0}
     assert parsed.circuit.instruction == [Instruction.CNOT(control=0, target=1), Instruction.H(1)]
+
+
+def test_if_statements() -> None:
+    """Test if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+if (b[0]) {
+    x q[0];
+}
+b[1] = measure q[0];
+if (b[0] ^ b[1]) {
+    x q[1];
+    z q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    circuit = parser.parse_str(s).circuit
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.CONDINSTR({2}, (Instruction.X(0),)),
+        Instruction.M(0, Axis.Z),
+        Instruction.CONDINSTR({0, 2}, (Instruction.X(1), Instruction.Z(1))),
+    ]
+
+
+def test_redundant_if_statements() -> None:
+    """Test redundant if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+b[1] = measure q[0];
+if (b[0] ^ b[1] ^ b[0]) {
+    x q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    with pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."):
+        circuit = parser.parse_str(s).circuit
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.M(0, Axis.Z),
+        Instruction.CONDINSTR({0}, (Instruction.X(1),)),
+    ]
+
+
+def test_void_if_statements() -> None:
+    """Test if statements."""
+    s = """
+include "stdgates.inc";
+qubit[3] q;
+bit[2] b;
+b[0] = measure q[2];
+b[1] = measure q[0];
+if (b[1] ^ b[1]) {
+    z q[1];
+ }
+"""
+    parser = OpenQASMParser()
+    with (
+        pytest.warns(UserWarning, match=r"Conditional instruction with empty condition dropped."),
+        pytest.warns(UserWarning, match=r"Redundant bits are removed from domains."),
+    ):
+        circuit = parser.parse_str(s).circuit
+    assert circuit.width == 3
+    assert circuit.instruction == [
+        Instruction.M(2, Axis.Z),
+        Instruction.M(0, Axis.Z),
+        Instruction.Z(1),
+    ]
