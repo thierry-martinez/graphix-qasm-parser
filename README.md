@@ -112,6 +112,12 @@ Measurements of the form `bit = measure qubit;`, or the old syntax
 
 Both arguments must be registers of the same size, or both must be bit/qubit types.
 
+By default, measured qubits are discarded, as in Graphix circuits: a
+measured qubit cannot be used afterwards. In OpenQASM, measured qubits
+remain available, in the post-measurement state: this behavior is
+obtained with `OpenQASMParser(discard_measurements=False)`, which produces
+measurements without discard (`Instruction.M(..., discard=False)`).
+
 ### [If](https://openqasm.com/language/classical.html#if-else-statements) statements
 
 Statements of the form `if (domain) { ... }` are supported when

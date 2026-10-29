@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 from graphix import ANGLE_PI, Axis, Instruction, rad_to_angle
+from graphix.sim.statevec import Statevector
+from graphix.states import BasicStates
 
 from graphix_qasm_parser import OpenQASMParser
 
@@ -454,10 +457,10 @@ if (b[0] ^ b[1]) {
     assert circuit.width == 3
     assert circuit.instruction == [
         Instruction.M(2, Axis.Z),
-        Instruction.CONDINSTR({2}, (Instruction.X(0),)),
+        Instruction.CONDINSTR({0}, (Instruction.X(0),)),
         Instruction.M(0, Axis.Z),
         Instruction.CONDINSTR(
-            {0, 2},
+            {0, 1},
             (
                 Instruction.X(1),
                 Instruction.Z(1),
@@ -485,7 +488,7 @@ if (b[0] ^ b[1] ^ b[0]) {
     assert circuit.instruction == [
         Instruction.M(2, Axis.Z),
         Instruction.M(0, Axis.Z),
-        Instruction.CONDINSTR({0}, (Instruction.X(1),)),
+        Instruction.CONDINSTR({1}, (Instruction.X(1),)),
     ]
 
 
@@ -513,3 +516,44 @@ if (b[1] ^ b[1]) {
         Instruction.M(0, Axis.Z),
         Instruction.Z(1),
     ]
+
+
+def test_measurement_without_discard() -> None:
+    """Test measurements without discard."""
+    s = """
+include "stdgates.inc";
+qubit[2] q;
+bit[2] b;
+b[0] = measure q[0];
+x q[0];
+b[1] = measure q[0];
+if (b[1]) {
+    x q[1];
+}
+"""
+    parser = OpenQASMParser(discard_measurements=False)
+    circuit = parser.parse_str(s)
+    assert circuit.width == 2
+    assert circuit.instruction == [
+        Instruction.M(0, Axis.Z, discard=False),
+        Instruction.X(0),
+        Instruction.M(0, Axis.Z, discard=False),
+        Instruction.CONDINSTR({1}, (Instruction.X(1),)),
+    ]
+    result = circuit.simulate(input_state=[BasicStates.ZERO, BasicStates.ZERO], rng=np.random.default_rng(42))
+    assert result.classical_measures == (0, 1)
+    assert result.state.isclose(Statevector(data=[BasicStates.ONE, BasicStates.ONE]))
+
+
+def test_measured_qubit_discarded() -> None:
+    """Test that measured qubits cannot be used afterwards by default."""
+    s = """
+include "stdgates.inc";
+qubit q;
+bit b;
+b = measure q;
+x q;
+"""
+    parser = OpenQASMParser()
+    with pytest.raises(ValueError, match=r"Qubit 0 is not an active qubit."):
+        parser.parse_str(s)
