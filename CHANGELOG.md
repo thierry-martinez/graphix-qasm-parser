@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `parse_str` and `parse_file` return `ParsedCircuit` instances containing mappings from declared identifiers to bit and qubit indices.
   - Support for physical qubits.
 
+- #23: Support for measurements without discard with the `discard_measurements` option of `OpenQASMParser`. The domains of `if`-statements now refer to the indices of measurements rather than to the indices of measured qubits, following Graphix's new convention for `CONDINSTR`.
+
 ## [0.1.1] - 2026-02-05
 
 - #7: Parsing of `CZ` gate

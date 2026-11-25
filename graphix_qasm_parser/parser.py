@@ -88,8 +88,23 @@ class ParsedCircuit:
 _T = TypeVar("_T")
 
 
+@dataclass(kw_only=True)
 class OpenQASMParser:
-    """Graphix OpenQASM parser."""
+    """
+    Graphix OpenQASM parser.
+
+    Attributes
+    ----------
+    discard_measurements : bool, optional
+        If ``True`` (the default), measured qubits are discarded, as in
+        Graphix circuits by default: a measured qubit cannot be used
+        afterwards. If ``False``, measured qubits remain active after
+        the measurement, in the post-measurement state, as specified by
+        OpenQASM. See :class:`graphix.instruction.M`.
+
+    """
+
+    discard_measurements: bool = True
 
     def parse_stream(self, stream: InputStream, *, stacklevel: int = 1) -> ParsedCircuit:
         """
@@ -751,6 +766,8 @@ class _CircuitVisitor(qasm3ParserVisitor):
     user_defined_gates: dict[str, _Gate]
     declared_symbols: list[str]
     physical_qubits: dict[int, _Qubit]
+    measurement_count: int
+    """Number of measurements so far: the next measurement writes the bit of this index."""
 
     def __init__(self, parser: OpenQASMParser) -> None:
         self.parser = parser
@@ -761,6 +778,7 @@ class _CircuitVisitor(qasm3ParserVisitor):
         self.user_defined_gates = {}
         self.declared_symbols = []
         self.physical_qubits = {}
+        self.measurement_count = 0
 
     def expect_circuit_block(self, ctx: ParserRuleContext) -> _CircuitBlock:  # type: ignore[valid-type]
         if not isinstance(self.block, _CircuitBlock):
@@ -937,9 +955,10 @@ class _CircuitVisitor(qasm3ParserVisitor):
             msg = f"Only assignment to bit is supported: {target_bit} unexpected."
             raise NotImplementedError(msg)
         qubit_index = target_qubit.as_qubit().index
-        instruction = Instruction.M(qubit_index, Axis.Z)
+        instruction = Instruction.M(qubit_index, Axis.Z, discard=self.parser.discard_measurements)
         block.instructions.append(instruction)
-        target_bit.index = qubit_index
+        target_bit.index = self.measurement_count
+        self.measurement_count += 1
 
     def declare_register(self, ctx: ParserRuleContext, decl_kind: _DeclKind) -> _Value:  # type: ignore[valid-type]
         match decl_kind:
