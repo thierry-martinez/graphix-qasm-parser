@@ -547,7 +547,7 @@ if (b[1]) {
 }
 """
     parser = OpenQASMParser(discard_measurements=False)
-    circuit = parser.parse_str(s)
+    circuit = parser.parse_str(s).circuit
     assert circuit.width == 2
     assert circuit.instruction == [
         Instruction.M(0, Axis.Z, discard=False),
