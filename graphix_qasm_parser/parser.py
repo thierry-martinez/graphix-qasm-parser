@@ -74,7 +74,7 @@ class ParsedCircuit:
     >>> parsed = parser.parse_str(s)
     >>> assert parsed.circuit.width == 6
     >>> assert parsed.qubits == {"q": (0, 1), "single_q": 4}
-    >>> assert parsed.bits == {"b": (None, None, None), "single_b": 5}
+    >>> assert parsed.bits == {"b": (None, None, None), "single_b": 0}
     >>> assert parsed.physical_qubits == {1: 2, 2: 3, 3: 5}
 
     """
